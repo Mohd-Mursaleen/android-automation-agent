@@ -1,6 +1,5 @@
 requests>=2.32.3
 pillow
-pydantic>=2.0.0
 openai>=1.0.0
 pyaml>=24.9.0
 python-dotenv>=1.0.0

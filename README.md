@@ -1,26 +1,31 @@
-# android-ai-agent
+# android-automation-agent
 
-> AI agent that automates any task on a real Android device.
-> Works on Termux — no PC, no desktop, no ADB over USB required.
+> Automate any task on an Android device using plain English.
+> Powered by LLMs. Controlled via ADB. Works everywhere.
 
-android-ai-agent is an open-source AI agent for Android automation.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![OpenRouter](https://img.shields.io/badge/powered%20by-OpenRouter-orange.svg)](https://openrouter.ai)
+
+android-automation-agent is an open-source AI agent for Android automation.
 It uses a multi-agent state machine to plan, execute, and verify tasks
-on a real Android device using ADB — with no app-specific code, no
-brittle selectors, and no desktop required.
+on any Android device using ADB — with no app-specific code, no
+brittle selectors, and no manual scripting.
 
 Give it a goal in plain English. It figures out the rest.
 
 ```bash
-python run.py "Open Instamart, search for Greek yogurt, add to cart"
-python run.py "Book a Rapido auto to MG Road"
 python run.py "Open Settings and find the Android version"
+python run.py "Search for headphones on Amazon and add the first result to cart"
+python run.py "Open YouTube and play the first trending video"
+python run.py "Open Instamart, search for Greek yogurt, add to cart"
 ```
 
 ---
 
 ## How it works
 
-android-ai-agent uses a 6-node state machine:
+android-automation-agent uses a 6-node state machine:
 
 ```
 PLANNER → ORCHESTRATOR → CONTEXTOR → CORTEX → EXECUTOR → SUMMARIZER
@@ -36,56 +41,80 @@ PLANNER → ORCHESTRATOR → CONTEXTOR → CORTEX → EXECUTOR → SUMMARIZER
 | **Executor**     | Runs ADB commands on the device (tap, gesture, type, key press)                                                   |
 | **Summarizer**   | Takes a new screenshot and verifies the action worked before moving on                                            |
 
-The key insight: by combining screenshots with `uiautomator dump`,
-the Cortex agent gets exact pixel coordinates for every element.
+**The key insight:** by combining screenshots with `uiautomator dump`,
+the Cortex agent gets exact pixel coordinates for every UI element.
 No visual coordinate guessing. This is why taps are reliable.
 
 ---
 
 ## Requirements
 
-- Android device with Developer Options + Wireless Debugging enabled
-- Termux (from F-Droid) **or** any Linux/macOS with ADB installed
+- Android device with Developer Options + ADB Debugging enabled
+- ADB installed on your host machine (or on the device via Termux)
 - Python 3.10+
-- OpenRouter API key (free at [openrouter.ai/keys](https://openrouter.ai/keys))
+- OpenRouter API key — free at [openrouter.ai/keys](https://openrouter.ai/keys)
 
 ---
 
 ## Setup
 
-### On Termux (Android — no PC needed)
+### Linux / macOS
 
 ```bash
-# Install dependencies
-pkg install python android-tools git
+# Install ADB if you don't have it
+# macOS:  brew install android-platform-tools
+# Ubuntu: sudo apt install adb
 
-# Clone
-git clone https://github.com/Mohd-Mursaleen/android-ai-agent
-cd android-ai-agent
+git clone https://github.com/Mohd-Mursaleen/android-automation-agent
+cd android-automation-agent
 
-# Setup (creates venv + installs deps + creates .env)
+# One-command setup (creates venv, installs deps, creates .env)
 chmod +x setup.sh && ./setup.sh
 
 # Add your OpenRouter API key
-nano .env
-# Set: OPENROUTER_API_KEY=your_key_here
+nano .env   # set OPENROUTER_API_KEY=your_key_here
 
-# Connect ADB to the device itself
-adb connect 127.0.0.1:5555
+# Connect your device via USB or WiFi ADB
+adb devices   # confirm device is listed
 
-# Verify everything
+# Verify everything works
 python check.py
 ```
 
-### On Linux / macOS
+### Windows (WSL or native)
 
 ```bash
-git clone https://github.com/Mohd-Mursaleen/android-ai-agent
-cd android-ai-agent
-chmod +x setup.sh && ./setup.sh
-nano .env   # add OPENROUTER_API_KEY
+# Option A — WSL (recommended)
+wsl --install   # if not already set up
+# then follow the Linux steps above inside WSL
+
+# Option B — native Windows with ADB
+# Install Python 3.10+ from python.org
+# Install ADB: https://developer.android.com/studio/releases/platform-tools
+git clone https://github.com/Mohd-Mursaleen/android-automation-agent
+cd android-automation-agent
+python -m venv .venv && .venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+# Edit .env and add your OPENROUTER_API_KEY
 python check.py
 ```
+
+### Termux (run directly on your Android device — no PC needed)
+
+```bash
+pkg install python android-tools git
+git clone https://github.com/Mohd-Mursaleen/android-automation-agent
+cd android-automation-agent
+chmod +x setup.sh && ./setup.sh
+nano .env   # add OPENROUTER_API_KEY
+adb connect 127.0.0.1:5555   # connect ADB to device itself
+python check.py
+```
+
+> **Termux-friendly:** This project works natively on Termux (arm64) with
+> zero compiled dependencies — no Rust, no C++, pure Python only.
+> You can run the entire agent on your Android phone with no PC at all.
 
 ---
 
@@ -93,14 +122,23 @@ python check.py
 
 ```bash
 # Activate venv (once per terminal session)
-source .venv/bin/activate
+source .venv/bin/activate   # Linux/macOS/Termux
+# or: .venv\Scripts\activate   (Windows)
 
 # Run any task
 python run.py "Open the Settings app"
-python run.py "Open Chrome and search for weather in Bengaluru"
+python run.py "Open Chrome and search for the weather"
+python run.py "Open YouTube and play the first trending video"
 python run.py "Open Instamart, add milk and eggs to cart"
-python run.py "Book a Rapido auto to MG Road" --steps 40
+
+# Long task — increase step budget
+python run.py "Book a cab to the airport" --steps 40
+
+# Suppress step-by-step output
 python run.py "Open Settings" --quiet
+
+# Target a specific device (from: adb devices)
+python run.py "Open Settings" --device emulator-5554
 
 # Health check
 python check.py
@@ -110,7 +148,7 @@ python check.py
 
 ## Configuration
 
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
 cp .env.example .env
@@ -120,28 +158,28 @@ cp .env.example .env
 # Required
 OPENROUTER_API_KEY=your_key_here
 
-# Optional — override default models
-PLANNER_MODEL=google/gemini-3-flash-preview
-CORTEX_MODEL=google/gemini-3-flash-preview
-SUMMARIZER_MODEL=google/gemini-3.1-flash-lite-preview
+# Optional — override default models (any model on openrouter.ai works)
+# PLANNER_MODEL=anthropic/claude-sonnet-4-5
+# CORTEX_MODEL=google/gemini-2.5-flash-preview
+# SUMMARIZER_MODEL=google/gemini-flash-1.5
 
 # Optional
-LOG_LEVEL=INFO
-MAX_STEPS=25
+# LOG_LEVEL=INFO
+# MAX_STEPS=25
 ```
 
 ---
 
 ## Models
 
-| Agent      | Default                                | Role                     |
-| ---------- | -------------------------------------- | ------------------------ |
-| Planner    | `google/gemini-3-flash-preview`        | Task decomposition       |
-| Cortex     | `google/gemini-3-flash-preview`        | Vision + decision making |
-| Summarizer | `google/gemini-3.1-flash-lite-preview` | Action verification      |
+| Agent      | Default                           | Role                     |
+| ---------- | --------------------------------- | ------------------------ |
+| Planner    | `anthropic/claude-sonnet-4-5`     | Task decomposition       |
+| Cortex     | `google/gemini-2.5-flash-preview` | Vision + decision making |
+| Summarizer | `google/gemini-flash-1.5`         | Action verification      |
 
 All calls go through [OpenRouter](https://openrouter.ai) — one API key,
-swap any model by setting an env variable.
+swap any model by editing your `.env`.
 
 ---
 
@@ -165,11 +203,11 @@ print("History:", state.action_history)
 ## Project structure
 
 ```
-android-ai-agent/
+android-automation-agent/
 ├── android_agent/
 │   ├── openrouter.py          # LLM client (vision + text) via OpenRouter
 │   ├── executor/
-│   │   └── android.py         # ADB executor (tap, gesture, type, key) — do not modify
+│   │   └── android.py         # ADB executor (tap, gesture, type, key)
 │   ├── graph/
 │   │   ├── config.py          # Model + env config
 │   │   ├── state.py           # AgentState dataclass

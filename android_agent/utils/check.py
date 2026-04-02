@@ -77,7 +77,7 @@ def _check_openrouter() -> bool:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "google/gemini-2.0-flash-lite",
+                "model": "google/gemini-3-flash-preview",
                 "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
                 "max_tokens": 5,
             },

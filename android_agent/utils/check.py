@@ -68,18 +68,23 @@ def _check_openrouter() -> bool:
         return False
 
     try:
-        from openai import OpenAI
+        import requests
 
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=key,
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "google/gemini-2.0-flash-lite",
+                "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+                "max_tokens": 5,
+            },
+            timeout=15,
         )
-        resp = client.chat.completions.create(
-            model="google/gemini-3-flash-preview",
-            messages=[{"role": "user", "content": "Reply with exactly: OK"}],
-            max_tokens=5,
-        )
-        answer = resp.choices[0].message.content.strip()
+        resp.raise_for_status()
+        answer = resp.json()["choices"][0]["message"]["content"].strip()
         print(f"  OK — API connected (responded: {answer!r})")
         return True
     except Exception as exc:

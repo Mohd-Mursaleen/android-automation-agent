@@ -1,37 +1,60 @@
 """
-OpenRouter client — OpenAI-compatible API for all LLM calls.
-All planner and finder calls route through here.
+OpenRouter client — pure requests, no OpenAI SDK.
+Uses the OpenRouter REST API directly so Termux arm64 installs cleanly
+(the openai package pulls jiter which requires Rust to build).
 """
 
+import json
 import os
 
-from openai import OpenAI
+import requests
 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-_EXTRA_HEADERS = {
-    "HTTP-Referer": "https://github.com/Mohd-Mursaleen/android-ai-agent",
-    "X-Title": "android-ai-agent",
+_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
+_HEADERS_COMMON = {
+    "HTTP-Referer": "https://github.com/Mohd-Mursaleen/android-automation-agent",
+    "X-Title": "android-automation-agent",
+    "Content-Type": "application/json",
 }
 
 
-def get_client() -> OpenAI:
+def _api_key() -> str:
     """
-    Build an OpenAI client pointed at OpenRouter.
+    Return the OpenRouter API key from the environment.
 
     Returns:
-        Configured OpenAI client.
+        API key string.
 
     Raises:
         ValueError: If OPENROUTER_API_KEY is not set.
     """
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
+    key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not key:
         raise ValueError(
             "OPENROUTER_API_KEY environment variable not set.\n"
             "Get your key at https://openrouter.ai/keys\n"
-            "Then run: export OPENROUTER_API_KEY='your-key-here'"
+            "Then add it to your .env file."
         )
-    return OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
+    return key
+
+
+def _post(payload: dict) -> dict:
+    """
+    POST to the OpenRouter completions endpoint.
+
+    Args:
+        payload: JSON-serialisable request body.
+
+    Returns:
+        Parsed JSON response dict.
+
+    Raises:
+        requests.HTTPError: On 4xx/5xx responses.
+        ValueError: If OPENROUTER_API_KEY is missing.
+    """
+    headers = {**_HEADERS_COMMON, "Authorization": f"Bearer {_api_key()}"}
+    resp = requests.post(_COMPLETIONS_URL, headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def vision_completion(
@@ -46,7 +69,7 @@ def vision_completion(
     Send a vision request (text + image) to OpenRouter.
 
     Args:
-        model: OpenRouter model ID, e.g. "anthropic/claude-sonnet-4-5".
+        model: OpenRouter model ID, e.g. "google/gemini-2.5-flash-preview".
         system_prompt: System message content.
         user_text: User message text accompanying the image.
         image_base64: Base64-encoded PNG screenshot.
@@ -58,14 +81,13 @@ def vision_completion(
 
     Raises:
         ValueError: If OPENROUTER_API_KEY is missing.
-        openai.OpenAIError: On API or network errors.
+        requests.HTTPError: On API errors.
     """
-    client = get_client()
-    response = client.chat.completions.create(
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        messages=[
+    data = _post({
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
@@ -73,14 +95,15 @@ def vision_completion(
                     {"type": "text", "text": user_text},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                        "image_url": {
+                            "url": f"data:image/png;base64,{image_base64}"
+                        },
                     },
                 ],
             },
         ],
-        extra_headers=_EXTRA_HEADERS,
-    )
-    return response.choices[0].message.content.strip()
+    })
+    return data["choices"][0]["message"]["content"].strip()
 
 
 def text_completion(
@@ -105,17 +128,15 @@ def text_completion(
 
     Raises:
         ValueError: If OPENROUTER_API_KEY is missing.
-        openai.OpenAIError: On API or network errors.
+        requests.HTTPError: On API errors.
     """
-    client = get_client()
-    response = client.chat.completions.create(
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        messages=[
+    data = _post({
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},
         ],
-        extra_headers=_EXTRA_HEADERS,
-    )
-    return response.choices[0].message.content.strip()
+    })
+    return data["choices"][0]["message"]["content"].strip()

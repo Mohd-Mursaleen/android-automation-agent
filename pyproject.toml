@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "android-ai-agent"
+version = "0.1.0"
+description = "AI agent that automates any task on a real Android device. Works on Termux. No PC required."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = [
+    "android",
+    "android automation",
+    "ai agent",
+    "android ai agent",
+    "adb automation",
+    "termux",
+    "llm agent",
+    "mobile automation",
+    "android testing",
+    "openrouter",
+    "gemini",
+    "claude",
+    "computer use",
+    "mobile agent",
+    "android control",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Android",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "requests>=2.32.3",
+    "pillow",
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+    "pyaml>=24.9.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0", "black>=24.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/Mohd-Mursaleen/android-ai-agent"
+Repository = "https://github.com/Mohd-Mursaleen/android-ai-agent"
+Issues = "https://github.com/Mohd-Mursaleen/android-ai-agent/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["android_agent*"]
+
+[tool.setuptools]
+py-modules = ["run", "check"]

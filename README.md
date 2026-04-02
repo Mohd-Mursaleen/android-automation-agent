@@ -1,154 +1,157 @@
-# android-automation-agent
+# Android Automation Agent
 
-> Automate any task on an Android device using plain English.
-> Powered by LLMs. Controlled via ADB. Works everywhere.
+> **Automate any Android device using natural language and AI.**  
+> The open-source AI agent for Android automation — control your phone with plain English.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![OpenRouter](https://img.shields.io/badge/powered%20by-OpenRouter-orange.svg)](https://openrouter.ai)
+[![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter-orange.svg)](https://openrouter.ai)
+[![Termux Compatible](https://img.shields.io/badge/Termux-compatible-brightgreen.svg)](https://termux.dev)
+[![GitHub stars](https://img.shields.io/github/stars/Mohd-Mursaleen/android-automation-agent?style=social)](https://github.com/Mohd-Mursaleen/android-automation-agent)
 
-android-automation-agent is an open-source AI agent for Android automation.
-It uses a multi-agent state machine to plan, execute, and verify tasks
-on any Android device using ADB — with no app-specific code, no
-brittle selectors, and no manual scripting.
+**Android Automation Agent** is an open-source AI-powered tool that automates any Android device using natural language commands. Built by [Mohd Mursaleen](https://github.com/Mohd-Mursaleen), it combines vision AI models with Android's UI accessibility tree to reliably execute complex multi-step tasks — no manual scripting, no brittle XPath selectors, no app-specific code required.
 
-Give it a goal in plain English. It figures out the rest.
+**Use cases:** Android app testing, mobile automation, ADB scripting, Android bot, UI automation, automated testing, Android RPA, mobile QA, accessibility testing, and more.
 
 ```bash
-python run.py "Open Settings and find the Android version"
-python run.py "Search for headphones on Amazon and add the first result to cart"
-python run.py "Open YouTube and play the first trending video"
-python run.py "Open Instamart, search for Greek yogurt, add to cart"
+# E-commerce automation
+python run.py "Open Amazon, search for 'wireless earbuds under 2000', sort by customer reviews, and add the top-rated one to cart"
+
+# Food delivery
+python run.py "Open Swiggy, search for 'butter chicken', find a restaurant with 4+ stars, and add it to cart"
+
+# Social media
+python run.py "Open Instagram, go to reels, like the first 3 videos, then open my profile and check followers count"
+
+# Productivity
+python run.py "Open Gmail, find the latest email from Amazon, and forward it to myself with subject 'Order Confirmation'"
 ```
 
 ---
 
-## How it works
+## How It Works
 
-android-automation-agent uses a 6-node state machine:
+The agent uses a 6-node state machine that plans, executes, and verifies each action:
 
 ```
 PLANNER → ORCHESTRATOR → CONTEXTOR → CORTEX → EXECUTOR → SUMMARIZER
-                              ↑__________________________|
+                              ↑___________________________|
 ```
 
-| Node             | What it does                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Planner**      | Breaks your goal into 2–5 ordered, verifiable subgoals                                                            |
-| **Orchestrator** | Picks the next pending subgoal and activates it                                                                   |
-| **Contextor**    | Takes a screenshot AND dumps the full UI accessibility tree with exact element coordinates via `uiautomator dump` |
-| **Cortex**       | The brain — decides the next action using exact coordinates from the UI tree, never guesses visually              |
-| **Executor**     | Runs ADB commands on the device (tap, gesture, type, key press)                                                   |
-| **Summarizer**   | Takes a new screenshot and verifies the action worked before moving on                                            |
+| Node             | Role |
+| ---------------- | ---- |
+| **Planner**      | Breaks your goal into 2–5 verifiable subgoals |
+| **Orchestrator** | Manages subgoal execution order and tracks progress |
+| **Contextor**    | Captures screenshot + UI tree with exact element coordinates |
+| **Cortex**       | Decides the next action using vision + coordinate data |
+| **Executor**     | Sends ADB commands (tap, swipe, type, keypress) |
+| **Summarizer**   | Verifies action success before proceeding |
 
-**The key insight:** by combining screenshots with `uiautomator dump`,
-the Cortex agent gets exact pixel coordinates for every UI element.
-No visual coordinate guessing. This is why taps are reliable.
+**Why it works:** The Contextor combines screenshots with `uiautomator dump` to provide exact pixel coordinates for every UI element. The Cortex never guesses — it uses real coordinate data.
 
 ---
 
 ## Requirements
 
-- Android device with Developer Options + ADB Debugging enabled
-- ADB installed on your host machine (or on the device via Termux)
-- Python 3.10+
-- OpenRouter API key — free at [openrouter.ai/keys](https://openrouter.ai/keys)
+- **Android device** with Developer Options + USB/Wireless Debugging enabled
+- **ADB** installed on your machine
+- **Python 3.10+**
+- **OpenRouter API key** — free at [openrouter.ai/keys](https://openrouter.ai/keys)
 
 ---
 
-## Setup
+## Quick Start
 
 ### Linux / macOS
 
 ```bash
-# Install ADB if you don't have it
+# Install ADB
 # macOS:  brew install android-platform-tools
 # Ubuntu: sudo apt install adb
 
 git clone https://github.com/Mohd-Mursaleen/android-automation-agent
 cd android-automation-agent
-
-# One-command setup (creates venv, installs deps, creates .env)
 chmod +x setup.sh && ./setup.sh
 
-# Add your OpenRouter API key
-nano .env   # set OPENROUTER_API_KEY=your_key_here
+# Add your API key
+echo "OPENROUTER_API_KEY=your_key_here" > .env
 
-# Connect your device via USB or WiFi ADB
-adb devices   # confirm device is listed
-
-# Verify everything works
+# Connect device and verify
+adb devices
 python check.py
 ```
 
-### Windows (WSL or native)
+### Windows
 
 ```bash
-# Option A — WSL (recommended)
-wsl --install   # if not already set up
-# then follow the Linux steps above inside WSL
+# WSL recommended — or native Python 3.10+ with ADB from:
+# https://developer.android.com/studio/releases/platform-tools
 
-# Option B — native Windows with ADB
-# Install Python 3.10+ from python.org
-# Install ADB: https://developer.android.com/studio/releases/platform-tools
 git clone https://github.com/Mohd-Mursaleen/android-automation-agent
 cd android-automation-agent
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env
-# Edit .env and add your OPENROUTER_API_KEY
+copy .env.example .env   # then edit to add your API key
 python check.py
 ```
 
-### Termux (run directly on your Android device — no PC needed)
+### Termux (on-device, no PC required)
 
 ```bash
 pkg install python android-tools git
 git clone https://github.com/Mohd-Mursaleen/android-automation-agent
-cd android-automation-agent
-chmod +x setup.sh && ./setup.sh
-nano .env   # add OPENROUTER_API_KEY
-adb connect 127.0.0.1:5555   # connect ADB to device itself
+cd android-automation-agent && ./setup.sh
+echo "OPENROUTER_API_KEY=your_key" > .env
+adb connect 127.0.0.1:5555
 python check.py
 ```
 
-> **Termux-friendly:** This project works natively on Termux (arm64) with
-> zero compiled dependencies — no Rust, no C++, pure Python only.
-> You can run the entire agent on your Android phone with no PC at all.
+> **Note:** Fully Termux-compatible — pure Python, no Rust/C++ dependencies.
 
 ---
 
 ## Usage
 
 ```bash
-# Activate venv (once per terminal session)
-source .venv/bin/activate   # Linux/macOS/Termux
-# or: .venv\Scripts\activate   (Windows)
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
+```
 
-# Run any task
-python run.py "Open the Settings app"
-python run.py "Open Chrome and search for the weather"
-python run.py "Open YouTube and play the first trending video"
-python run.py "Open Instamart, add milk and eggs to cart"
+### Complex Multi-Step Tasks
 
-# Long task — increase step budget
-python run.py "Book a cab to the airport" --steps 40
+```bash
+# Shopping workflow with filters
+python run.py "Open Flipkart, search for 'running shoes size 10', filter by rating 4+, sort by price low to high, and add the first Nike shoe to cart"
 
-# Suppress step-by-step output
+# Travel booking
+python run.py "Open MakeMyTrip, search for flights from Delhi to Mumbai on 15th January, select the cheapest non-stop flight, and proceed to booking"
+
+# Banking
+python run.py "Open PayTM, check my balance, then send 500 rupees to the contact named 'Rahul'"
+
+# Content creation
+python run.py "Open YouTube Studio, go to my latest video, check the analytics, and reply 'Thank you!' to the top comment"
+```
+
+### Options
+
+```bash
+# Increase steps for longer tasks
+python run.py "Complete a multi-step checkout process" --steps 50
+
+# Quiet mode (less output)
 python run.py "Open Settings" --quiet
 
-# Target a specific device (from: adb devices)
-python run.py "Open Settings" --device emulator-5554
+# Target specific device
+python run.py "Open Camera" --device emulator-5554
 
 # Health check
-python check.py
+python run.py --check
 ```
 
 ---
 
 ## Configuration
-
-Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
 cp .env.example .env
@@ -158,61 +161,66 @@ cp .env.example .env
 # Required
 OPENROUTER_API_KEY=your_key_here
 
-# Optional — override default models (any model on openrouter.ai works)
-# PLANNER_MODEL=anthropic/claude-sonnet-4-5
-# CORTEX_MODEL=google/gemini-2.5-flash-preview
-# SUMMARIZER_MODEL=google/gemini-flash-1.5
+# Optional — override default models
+PLANNER_MODEL=google/gemini-3-flash-preview
+CORTEX_MODEL=google/gemini-3-flash-preview
+SUMMARIZER_MODEL=google/gemini-3.1-flash-lite-preview
 
-# Optional
-# LOG_LEVEL=INFO
-# MAX_STEPS=25
+# Optional — tuning
+MAX_STEPS=25
+STEP_DELAY=2.0
+LOG_LEVEL=INFO
 ```
 
 ---
 
 ## Models
 
-| Agent      | Default                           | Role                     |
-| ---------- | --------------------------------- | ------------------------ |
-| Planner    | `anthropic/claude-sonnet-4-5`     | Task decomposition       |
-| Cortex     | `google/gemini-2.5-flash-preview` | Vision + decision making |
-| Summarizer | `google/gemini-flash-1.5`         | Action verification      |
+| Agent      | Default Model                          | Purpose                  |
+| ---------- | -------------------------------------- | ------------------------ |
+| Planner    | `google/gemini-3-flash-preview`        | Task decomposition       |
+| Cortex     | `google/gemini-3-flash-preview`        | Vision + action decision |
+| Summarizer | `google/gemini-3.1-flash-lite-preview` | Action verification      |
 
-All calls go through [OpenRouter](https://openrouter.ai) — one API key,
-swap any model by editing your `.env`.
+All LLM calls route through [OpenRouter](https://openrouter.ai) — use any supported model by changing your `.env`.
 
 ---
 
-## Use as a Python library
+## Python API
 
 ```python
 from android_agent.graph.runner import run_task
 
 state = run_task(
-    goal="Open Settings and find the Android version",
-    max_steps=25,
+    goal="Open Chrome, search for 'Python tutorials', and open the first result",
+    max_steps=30,
+    quality=75,      # screenshot quality (50-100)
     verbose=True,
+    device_id=None,  # auto-detect
 )
 
-print("Success:", state.task_complete)
-print("History:", state.action_history)
+if state.task_complete:
+    print(f"Done in {state.step_count} steps")
+    print("Actions:", state.action_history)
+else:
+    print(f"Failed: {state.failure_reason}")
 ```
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
 android-automation-agent/
 ├── android_agent/
-│   ├── openrouter.py          # LLM client (vision + text) via OpenRouter
+│   ├── openrouter.py           # LLM client (vision + text)
 │   ├── executor/
-│   │   └── android.py         # ADB executor (tap, gesture, type, key)
+│   │   └── android.py          # ADB commands (tap, swipe, type)
 │   ├── graph/
-│   │   ├── config.py          # Model + env config
-│   │   ├── state.py           # AgentState dataclass
-│   │   ├── runner.py          # Main loop
-│   │   └── nodes/
+│   │   ├── config.py           # Model & env configuration
+│   │   ├── state.py            # AgentState dataclass
+│   │   ├── runner.py           # Main execution loop
+│   │   └── nodes/              # State machine nodes
 │   │       ├── planner.py
 │   │       ├── orchestrator.py
 │   │       ├── contextor.py
@@ -222,9 +230,9 @@ android-automation-agent/
 │   │       └── convergence.py
 │   └── utils/
 │       └── check.py
-├── run.py                     # Entry point
-├── check.py                   # Health check
-├── setup.sh                   # One-command setup
+├── run.py                      # CLI entry point
+├── check.py                    # Health check script
+├── setup.sh                    # One-command setup
 ├── requirements.txt
 ├── .env.example
 └── pyproject.toml
@@ -234,7 +242,16 @@ android-automation-agent/
 
 ## Contributing
 
-PRs welcome. Please open an issue first for major changes.
+PRs welcome! Please open an issue first for major changes.
+
+---
+
+## Author
+
+Built with ❤️ by **[Mohd Mursaleen](https://github.com/Mohd-Mursaleen)**
+
+- GitHub: [@Mohd-Mursaleen](https://github.com/Mohd-Mursaleen)
+- Project: [android-automation-agent](https://github.com/Mohd-Mursaleen/android-automation-agent)
 
 ---
 
@@ -242,8 +259,8 @@ PRs welcome. Please open an issue first for major changes.
 
 MIT — free to use, modify, and distribute.
 
-<!-- GitHub Topics to add on this repo for SEO:
-android, android-automation, ai-agent, adb, termux, llm,
-mobile-automation, android-testing, openrouter, gemini,
-claude, computer-use, mobile-agent, python, automation
--->
+---
+
+## Keywords
+
+Android automation, Android AI agent, ADB automation, mobile automation, Android bot, Android testing, UI automation, Android RPA, Termux automation, mobile AI agent, Android scripting, natural language automation, LLM Android, Gemini Android, OpenRouter, Android accessibility, mobile testing framework, Android task automation, no-code Android automation, AI-powered Android control

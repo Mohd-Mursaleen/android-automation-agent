@@ -5,6 +5,8 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+.agents
+skills-lock.json
 build/
 develop-eggs/
 dist/

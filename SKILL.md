@@ -74,14 +74,29 @@ ${SUMMARY}"
 done'
 ```
 
-Step 1b — Start the progress reporter (runs independently, never stops):
+Step 1b — Kill any previous progress loop, then start a new one:
+
+```
+PID_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/progress.pid"
+[ -f "$PID_FILE" ] && kill $(cat "$PID_FILE") 2>/dev/null; rm -f "$PID_FILE"
+```
 
 ```
 exec yieldMs=500 command='BOT_TOKEN="YOUR_BOT_TOKEN"
 CHAT_ID="YOUR_CHAT_ID"
 STEP_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_step.json"
+RESULT_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json"
+PID_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/progress.pid"
+echo $$ > "$PID_FILE"
 while true; do
   sleep 15
+  if [ -f "$RESULT_FILE" ]; then
+    MTIME=$(stat -c %Y "$RESULT_FILE")
+    NOW=$(date +%s)
+    if [ $((NOW - MTIME)) -lt 90 ]; then
+      break
+    fi
+  fi
   if [ -f "$STEP_FILE" ]; then
     STEP=$(python3 - <<PYEOF
 import json
@@ -98,12 +113,13 @@ PYEOF
         --data-urlencode "text=⏳ ${STEP}"
     fi
   fi
-done'
+done
+rm -f "$PID_FILE"'
 ```
 
 Step 2 — Tell the user and run the agent:
 
-Tell user: "Monitor started, running your task now..."
+Tell user: "Task started. Goal: '<goal string used>'. Sending live updates every 15s."
 
 ```
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
@@ -145,33 +161,39 @@ Then analyze what's visible and report. Always take a fresh screencap — `last_
 ---
 
 Goal string format
-The agent navigates and taps only. It cannot read text, extract values, or return data.
-Translate user intent into navigation-only goals.
 
-For info requests ("what's the price", "what's the fare", "is X available"):
-- End the goal at the target screen
-- Never include "show me", "tell me", "read", "confirm", or "return"
-- Bad:  "Tell me the Uber fare to Indiranagar"
-- Good: "Open Uber, set destination to Indiranagar, wait for ride options to load"
-- The screenshot IS the answer — read it visually and report
+The android agent reads the screen pixel by pixel and finds UI elements
+visually. Your job is to pass intent clearly — not to interpret, translate,
+or improve the user's words.
 
-For action requests ("add to cart", "book ride", "search for X"):
-- Be precise: exact item name, exact app, all steps
-- Bad:  "buy me milk"
-- Good: "Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart"
+Rules (never break these):
 
-Use the user's exact words — never paraphrase, rename, or interpret.
-- If user says "bike ride" → goal says "bike ride", not "Uber Moto"
-- If user says "the red button" → goal says "the red button"
-- Only add mechanical prerequisites the user skipped (e.g. "open the app first")
-- The agent reads the screen pixel by pixel — over-translating causes failures
+1. Never substitute the user's words for what you think the UI says.
+   - User says "bike ride" → goal says "bike ride". Not "Uber Moto", not "motorcycle".
+   - User says "Instamart" → goal says "Open Instamart". Not "Open Swiggy, go to Instamart".
+   - The agent will find the right element on screen. Trust it.
 
-Context-aware goals (when user references a prior run):
-If user says "now order it", "complete checkout", "confirm it" — before building the goal:
-1. Read `last_result.json` to confirm what the previous task did and whether it succeeded
-2. Embed that context explicitly in the goal string — the agent has no memory
-- Wrong: "order greek yogurt"
-- Right:  "Greek yogurt is already in the Instamart cart. Open Instamart, go to cart, complete checkout."
+2. Never assume how an app is accessed. If the user names an app directly,
+   open it directly. Never route through a parent app unless the user says so.
+   - Wrong: "Open Swiggy, tap Instamart"
+   - Right: "Open Instamart"
+
+3. Only add steps the user skipped that are purely mechanical:
+   - Acceptable: "open the app first", "tap the search bar"
+   - Not acceptable: renaming anything the user said
+
+4. For info requests ("what's the price", "what's the fare"):
+   - End the goal at the target screen. Never say "show me", "tell me", "read", "return".
+   - Bad: "Tell me the Uber fare to Indiranagar"
+   - Good: "Open Uber, set destination to Indiranagar, wait for ride options to load"
+   - The screenshot is the answer. Read it visually after the agent finishes.
+
+5. For context-aware follow-ups ("order it", "complete checkout", "confirm it"):
+   - Read last_result.json to confirm what the previous task did
+   - Add that context at the start of the goal string
+   - Keep the user's current words unchanged after the context
+   - Wrong: "order greek yogurt"
+   - Right: "Greek yogurt is already in the Instamart cart. Open Instamart, go to cart, complete checkout."
 
 If ambiguous, ask before constructing the goal.
 

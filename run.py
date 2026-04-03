@@ -188,6 +188,7 @@ Examples:
 
     if args.json_mode:
         print(json.dumps(result))
+        sys.stdout.flush()
 
     sys.exit(0 if state.task_complete else 1)
 

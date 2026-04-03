@@ -14,28 +14,40 @@ Quick start
 - `cd ~/android-automation-agent && python run.py --check`
 
 Run pattern
-Always run in background. Stay responsive to the user while automation is running.
-1. Run with `background: true`
-2. Tell user: "Started — I'll check back when it's done."
-3. Poll until process exits
-4. Read JSON from stdout (`summary` describes actions taken, not screen content — ignore it for data)
-5. Send the final screenshot and report visually (see below)
+Always run in background. `--json` is mandatory — it ensures stdout is a single parseable JSON object.
+- `exec command="cd ~/android-automation-agent && python run.py \"<goal>\" --json" background=true` → save the returned `sessionId`
+- Tell user: "Started — I'll check back when it's done."
+- `notifyOnExit` fires automatically when the process exits — no sleep loop needed
+- On notification: `process action=poll sessionId=<id>` → drains final stdout + exit status
 
 After every run
-The agent writes the final screenshot to `~/storage/shared/android_agent/last_screenshot.png` on exit. Send it immediately — it is the ground truth of what the screen shows:
-`curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@${HOME}/storage/shared/android_agent/last_screenshot.png" -F "caption=<summary from JSON>"`
-Then analyze the image visually, report what you see (prices, status, results), and ask if the user wants to take any action.
+After `process poll` returns, stdout contains the JSON result and the screenshot is written to `~/storage/shared/android_agent/last_screenshot.png`.
+- Parse the JSON from the poll output
+- Attach `~/storage/shared/android_agent/last_screenshot.png` as a media file in your response
+- Analyze the screenshot visually — report what you see (prices, status, results)
+- Ask the user if they want to take any action
+Note: `summary` in the JSON describes actions taken, not screen content — read data from the screenshot, not from `summary`.
 
 Check current screen (anytime)
-When user asks "what's on screen?", "what's happening?", or "show me the phone" — take a fresh screencap and send it:
-`adb exec-out screencap -p > /tmp/screen.png && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@/tmp/screen.png" -F "caption=Current screen"`
-Then analyze what's visible and report it.
+When user asks "what's on screen?", "what's happening?", or "show me the phone":
+- `adb exec-out screencap -p > /tmp/screen.png`
+- Attach `/tmp/screen.png` as a media file in your response
+- Analyze what's visible and report it
 Always use a fresh screencap here — `last_screenshot.png` may be from a previous run.
 
-Goal string format
-- Bad: `"buy me milk"`
-- Good: `"Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart, verify cart badge shows 1 item"`
-- Use the user's exact words. Do not substitute, expand, or infer anything not explicitly stated. If the user says an app name, open that app directly. If the user specifies an item, search for exactly that. Do not add steps, alternate routes, or related apps based on assumptions. If anything is ambiguous, ask the user before constructing the goal.
+Goal string rules
+- The agent navigates and taps. It cannot read text, extract values, or report data back.
+- For info requests ("what's the price", "what's the fare", "is X in my cart"):
+    Translate to a navigation goal ending at the target screen. Do not include "show me", "read",
+    "confirm", or "return" in the goal string.
+    Bad:  "Open Instamart, search diet coke, show me the price"
+    Good: "Open Instamart, search for diet coke, wait for search results to load"
+    The screenshot OpenClaw receives after the run IS the answer. Read it visually and report.
+- For action requests ("add milk to cart", "open settings"):
+    Be precise and step-by-step. Include the exact item name, app name, and all intermediate steps.
+    Bad:  "buy me milk"
+    Good: "Open Blinkit, search for Nandini toned milk 500ml, tap the first result, tap Add to cart"
+- If the user's request is ambiguous, ask before constructing the goal.
 
 Task decomposition
 - Break complex workflows into sequential atomic runs — verify each run succeeded before starting the next.
@@ -46,5 +58,5 @@ Notes
 - Run in background (`background: true`) and poll until exit — never kill early.
 - Simple tasks: 30–120s. Complex tasks: up to 10 minutes.
 - Use `--steps 40+` for multi-screen flows or checkout.
-- On `success: false`, read `summary` to understand what happened; send screenshot to see current state.
+- On `success: false`, read `summary` to understand what happened; attach screenshot to see current state.
 - Never auto-retry a checkout run — verify manually first.

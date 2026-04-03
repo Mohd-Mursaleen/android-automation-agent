@@ -21,6 +21,10 @@ Each subgoal must:
 - Be a single verifiable UI action or navigation step
 - Be specific enough that a visual AI can confirm completion from a screenshot
 - Be ordered so subgoal N cannot start before subgoal N-1 is complete
+- Be a navigation or interaction action ONLY. Never create subgoals that require reading,
+  extracting, or reporting data (e.g. "confirm price is visible", "read fare amount",
+  "return the value"). The agent can tap and navigate — it cannot read text back to a caller.
+  The final screenshot is the data. Mark complete when the target screen is reached.
 
 Return ONLY a JSON array, no other text:
 [

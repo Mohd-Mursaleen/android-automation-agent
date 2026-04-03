@@ -35,6 +35,7 @@ Always use a fresh screencap here — `last_screenshot.png` may be from a previo
 Goal string format
 - Bad: `"buy me milk"`
 - Good: `"Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart, verify cart badge shows 1 item"`
+- Use the user's exact words. Do not substitute, expand, or infer anything not explicitly stated. If the user says an app name, open that app directly. If the user specifies an item, search for exactly that. Do not add steps, alternate routes, or related apps based on assumptions. If anything is ambiguous, ask the user before constructing the goal.
 
 Task decomposition
 - Break complex workflows into sequential atomic runs — verify each run succeeded before starting the next.

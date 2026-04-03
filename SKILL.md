@@ -15,28 +15,27 @@ Quick start
 
 Run pattern
 Always run in background. Save the sessionId returned by exec.
-1. `exec command="python run.py '<goal>' --json --steps <N>" workdir="~/android-automation-agent" background=true` → save sessionId
-2. Tell user: "Started — I'll update you automatically when it's done."
-3. Wait for notifyOnExit heartbeat — do NOT poll in a loop, do NOT use sleep
-4. On heartbeat: run `process action=poll sessionId=<id>` to get final JSON from stdout
-5. Parse the JSON, then follow "On process exit" steps below
+1. exec command="cd ~/android-automation-agent && python run.py '<goal>' --json --steps <N>" background=true
+   → save the returned sessionId
+2. Tell user: "Started — I'll update you as soon as it's done."
+3. notifyOnExit fires automatically when the process exits — no sleep loop, no polling
+4. Immediately on the heartbeat: run process action=poll sessionId=<id>
+   → this returns the final stdout which contains the JSON result
+5. Parse the JSON from the poll output — do NOT run cat or any file read
+6. Follow "On completion" steps below immediately
 
-On process exit (run these steps immediately, without waiting for user input)
-1. Read `~/storage/shared/android_agent/last_result.json` for the result
-2. Send `~/storage/shared/android_agent/last_screenshot.png` as a file attachment
-3. Look at the screenshot visually — read prices, status, text, anything relevant
-4. Reply in exactly 3 sentences: (1) task outcome, (2) what you see on screen
-   including exact prices/values/status, (3) ask what to do next
-5. Never skip step 4. Never say "No response generated." If context is full,
-   send the screenshot first, then send the 3-sentence reply as a separate message.
-
-After every run
-After `process poll` returns, stdout contains the JSON result and the screenshot is written to `~/storage/shared/android_agent/last_screenshot.png`.
-- Parse the JSON from the poll output
-- Attach `~/storage/shared/android_agent/last_screenshot.png` as a media file in your response
-- Analyze the screenshot visually — report what you see (prices, status, results)
-- Ask the user if they want to take any action
-Note: `summary` in the JSON describes actions taken, not screen content — read data from the screenshot, not from `summary`.
+On completion (run immediately on heartbeat, no user input needed)
+1. Get result: process action=poll sessionId=<id> — parse the JSON from stdout
+2. Send screenshot via CLI (no exec call, no curl):
+   openclaw message send --channel telegram --target <user_id> \
+     --message "<summary from JSON>" \
+     --media ~/storage/shared/android_agent/last_screenshot.png \
+     --force-document
+3. Read the screenshot visually — identify exact prices, status, text on screen
+4. Reply in 3 sentences max: (1) task outcome, (2) exact data you see on screen,
+   (3) ask what to do next
+5. CRITICAL: Do not run cat, do not read any file, do not make any exec call
+   in this heartbeat turn. All data comes from process poll stdout only.
 
 Check current screen (anytime)
 When user asks "what's on screen?", "what's happening?", or "show me the phone":
@@ -46,22 +45,22 @@ When user asks "what's on screen?", "what's happening?", or "show me the phone":
 Always use a fresh screencap here — `last_screenshot.png` may be from a previous run.
 
 Goal string format
-The agent navigates and taps. It CANNOT read text, extract values, or report
-data back to you. You must translate user intent into navigation-only goals.
+The agent navigates and taps only. It cannot read text, extract values,
+or return data. Translate user intent into navigation-only goals.
 
 For info requests ("what's the price", "what's the fare", "is X available"):
-  Translate to a goal that ends at the target screen. Never include "show me",
-  "tell me", "read", "confirm", or "return" in the goal string.
+  End the goal at the target screen. Never include "show me", "tell me",
+  "read", "confirm", or "return" in the goal string.
   Bad:  "Tell me the Uber fare to Indiranagar"
   Good: "Open Uber, set destination to Indiranagar, wait for ride options to load"
-  The screenshot you receive IS the answer. Read it and report prices/info yourself.
+  The screenshot IS the answer. Read it visually and report.
 
-For action requests ("add to cart", "open settings", "search for X"):
-  Be precise and step-by-step. Include exact item name, app name, all steps.
+For action requests ("add to cart", "book ride", "search for X"):
+  Be precise. Include exact item name, app, and all steps.
   Bad:  "buy me milk"
   Good: "Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart"
 
-If the user's request is ambiguous, ask before constructing the goal.
+If ambiguous, ask before constructing the goal.
 
 Task decomposition
 - Break complex workflows into sequential atomic runs — verify each run succeeded before starting the next.
@@ -74,4 +73,7 @@ Notes
 - Use `--steps 40+` for multi-screen flows or checkout.
 - On `success: false`, read `summary` to understand what happened; attach screenshot to see current state.
 - Never auto-retry a checkout run — verify manually first.
-- After sending the screenshot, always reply with what you see in 3 sentences max — task outcome, exact data visible (prices/values/text), next action options.
+- On completion: get all data from process poll stdout JSON only.
+  Never run cat or any file read in a heartbeat turn — it triggers approval loops.
+- After reading screenshot via process poll result, reply in 3 sentences max:
+  task outcome, exact visible data (prices/text/status), next action options.

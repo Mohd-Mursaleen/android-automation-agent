@@ -11,12 +11,12 @@ Automates real Android UI via ADB + LLM vision. One goal string in, one JSON res
 
 Quick start
 
-- `cd ~/android-automation-agent && python run.py "Open Settings"`
-- `cd ~/android-automation-agent && python run.py "Open Blinkit, add milk to cart" --steps 40`
+- `cd ~/android-automation-agent && python run.py "Open Settings" --json`
+- `cd ~/android-automation-agent && python run.py "Open Blinkit, add milk to cart"  --steps 30 --json`
 - `cd ~/android-automation-agent && python run.py --check`
 
 Run pattern — Background Run & Auto-Notify
-ALWAYS follow this two-step flow. Never deviate.
+ALWAYS follow this flow. Never deviate.
 
 Step 1 — Start the monitor loop FIRST (before running the agent):
 
@@ -30,17 +30,38 @@ exec yieldMs=500 command='while true; do
       sleep 4
       BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
       CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
-      CONTENTS=$(cat ~/storage/shared/android_agent/last_result.json)
+      GOAL=$(python3 -c "import json; d=json.load(open('/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json')); print(d.get('goal',''))" 2>/dev/null)
+      SUCCESS=$(python3 -c "import json; d=json.load(open('/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json')); print('✅' if d['success'] else '❌')" 2>/dev/null)
+      SUMMARY=$(python3 -c "import json; d=json.load(open('/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json')); print(d.get('summary','') + chr(10) + 'Steps: ' + str(d.get('steps','?')))" 2>/dev/null)
       curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
         -d "chat_id=${CHAT_ID}" \
-        -d "text=${CONTENTS}"
+        --data-urlencode "text=${SUCCESS} Task done: ${GOAL}
+${SUMMARY}"
       curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
         -F "chat_id=${CHAT_ID}" \
         -F "document=@/data/data/com.termux/files/home/storage/shared/android_agent/last_screenshot.png"
       break
     fi
   fi
-  sleep 30
+  sleep 15
+done'
+```
+
+Step 1b — Start the progress loop (runs independently, never breaks monitor):
+
+```
+exec yieldMs=500 command='BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
+CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
+while true; do
+  sleep 15
+  if [ -f ~/storage/shared/android_agent/last_step.json ]; then
+    STEP=$(python3 -c "import json,os; d=json.load(open(os.path.expanduser('"'"'~/storage/shared/android_agent/last_step.json'"'"'))); print('"'"'⏳ Step '"'"'+str(d['"'"'step'"'"'])+'"'"' — '"'"'+d['"'"'last_action'"'"']+'"'"' ('"'"'+str(d['"'"'elapsed_seconds'"'"'])+'"'"'s elapsed)'"'"')" 2>/dev/null)
+    if [ -n "$STEP" ]; then
+      curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -d "chat_id=${CHAT_ID}" \
+        -d "text=${STEP}"
+    fi
+  fi
 done'
 ```
 
@@ -48,6 +69,9 @@ Tell the user: "Monitor started, running your task now..."
 
 Step 2 — Run the automation agent:
 `cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json`
+
+Then immediately send this Telegram message (before ending your turn):
+`curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d "chat_id=${CHAT_ID}" -d "text=🤖 Agent started with prompt: '<exact goal string used>'"`
 
 Step 3 — Do nothing. The monitor delivers the JSON result + screenshot to Telegram automatically when done. No polling needed. End your turn.
 
@@ -82,16 +106,17 @@ Be precise. Include exact item name, app, and all steps.
 Bad: "buy me milk"
 Good: "Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart"
 
-Use the user's exact words — never paraphrase, rename, or interpret
+Use the user's exact words — never paraphrase, rename, or interpret.
 Never substitute what you think the UI calls something for what the user said.
+
 - "bike ride" → goal says "bike ride", not "Uber Moto" or "motorcycle"
 - "the red button" → goal says "the red button"
 - Do not add specifics the user didn't mention
 - Do not shorten or simplify the user's phrasing
-The only additions allowed are mechanical prerequisites the user skipped
-(e.g. "open the app first", "tap the search box"). Nothing else.
-The agent reads the screen pixel by pixel — it will find the right element.
-Over-translating the goal is what causes failures.
+  The only additions allowed are mechanical prerequisites the user skipped
+  (e.g. "open the app first", "tap the search box"). Nothing else.
+  The agent reads the screen pixel by pixel — it will find the right element.
+  Over-translating the goal is what causes failures.
 
 If ambiguous, ask before constructing the goal.
 

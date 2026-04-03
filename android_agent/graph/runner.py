@@ -6,7 +6,10 @@ Loop structure:
   planner → [orchestrator → convergence → contextor → cortex → executor → summarizer] × N
 """
 
+import json
 import logging
+import os
+import time
 
 from android_agent.executor.android import AndroidExecutor
 from android_agent.graph.nodes.contextor import contextor_node
@@ -49,6 +52,7 @@ def run_task(
     executor_node = ExecutorNode(android_executor, device_id=device_id)
 
     state = AgentState(initial_goal=goal, max_steps=max_steps)
+    _run_start = time.time()
 
     if verbose:
         print(f"\nGoal: {goal}")
@@ -87,6 +91,20 @@ def run_task(
             print(f"  [Step {state.step_count + 1}] {tool} — {reason}")
 
         state = executor_node.execute(state)
+
+        # Best-effort step progress write for external monitoring
+        try:
+            _step_path = os.path.expanduser("~/storage/shared/android_agent/last_step.json")
+            os.makedirs(os.path.dirname(_step_path), exist_ok=True)
+            with open(_step_path, "w") as _f:
+                json.dump({
+                    "step": state.step_count,
+                    "last_action": state.action_history[-1] if state.action_history else "",
+                    "elapsed_seconds": int(time.time() - _run_start),
+                    "goal": state.initial_goal,
+                }, _f)
+        except Exception:
+            pass
 
         state = summarizer_node(state, android_executor)
 

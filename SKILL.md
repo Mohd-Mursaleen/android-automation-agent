@@ -82,6 +82,17 @@ Be precise. Include exact item name, app, and all steps.
 Bad: "buy me milk"
 Good: "Open Blinkit, search for Nandini toned milk 500ml, tap first result, tap Add to cart"
 
+Use the user's exact words — never paraphrase, rename, or interpret
+Never substitute what you think the UI calls something for what the user said.
+- "bike ride" → goal says "bike ride", not "Uber Moto" or "motorcycle"
+- "the red button" → goal says "the red button"
+- Do not add specifics the user didn't mention
+- Do not shorten or simplify the user's phrasing
+The only additions allowed are mechanical prerequisites the user skipped
+(e.g. "open the app first", "tap the search box"). Nothing else.
+The agent reads the screen pixel by pixel — it will find the right element.
+Over-translating the goal is what causes failures.
+
 If ambiguous, ask before constructing the goal.
 
 Task decomposition

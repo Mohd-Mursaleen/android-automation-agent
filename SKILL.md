@@ -40,7 +40,7 @@ On completion (run immediately on heartbeat, no user input needed)
 Check current screen (anytime)
 When user asks "what's on screen?", "what's happening?", or "show me the phone":
 - `adb exec-out screencap -p > /tmp/screen.png`
-- Attach `/tmp/screen.png` as a media file in your response
+- `openclaw message send --channel telegram --target <user_id> --media /tmp/screen.png --force-document`
 - Analyze what's visible and report it
 Always use a fresh screencap here — `last_screenshot.png` may be from a previous run.
 

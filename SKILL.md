@@ -13,27 +13,24 @@ Quick start
 - `cd ~/android-automation-agent && python run.py "Open Blinkit, add milk to cart" --steps 40 --json`
 - `cd ~/android-automation-agent && python run.py --check`
 
-Background execution pattern
-Run every automation in background. Stay responsive to the user while it runs.
-1. Start: run the command with `background: true`
-2. Immediately tell the user: "Started — I'll check back when it's done."
+Run pattern
+Always run in background. Stay responsive to the user while automation is running.
+1. Run with `background: true`
+2. Tell user: "Started — I'll check back when it's done."
 3. Poll until process exits
-4. On exit: read result JSON, take a fresh screencap, report to user
+4. Read JSON from stdout (`summary` describes actions taken, not screen content — ignore it for data)
+5. Send the final screenshot and report visually (see below)
 
-Read results
-- Stdout: one JSON object on exit — `{"success":bool,"goal":"...","steps":N,"summary":"...","screenshot_path":"...","result_path":"..."}`
-- `summary` describes actions taken and exit state — use it to understand what happened, not as a source of screen data
-- Last result: `cat ~/storage/shared/android_agent/last_result.json`
-- Last screenshot: `~/storage/shared/android_agent/last_screenshot.png`
-
-Read screen data (prices, listings, text, availability)
-- The `summary` field does NOT contain screen content — never report prices, item names, or any values from it
-- After automation exits, always take a fresh screencap and read it directly:
-  `adb exec-out screencap -p > /tmp/screen_check.png`
-- Report only what you can see in that image
+After every run
+The agent writes the final screenshot to `~/storage/shared/android_agent/last_screenshot.png` on exit. Send it immediately — it is the ground truth of what the screen shows:
+`curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@${HOME}/storage/shared/android_agent/last_screenshot.png" -F "caption=<summary from JSON>"`
+Then analyze the image visually, report what you see (prices, status, results), and ask if the user wants to take any action.
 
 Check current screen (anytime)
-- `adb exec-out screencap -p > /tmp/screen.png`
+When user asks "what's on screen?", "what's happening?", or "show me the phone" — take a fresh screencap and send it:
+`adb exec-out screencap -p > /tmp/screen.png && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@/tmp/screen.png" -F "caption=Current screen"`
+Then analyze what's visible and report it.
+Always use a fresh screencap here — `last_screenshot.png` may be from a previous run.
 
 Goal string format
 - Bad: `"buy me milk"`
@@ -48,5 +45,5 @@ Notes
 - Run in background (`background: true`) and poll until exit — never kill early.
 - Simple tasks: 30–120s. Complex tasks: up to 10 minutes.
 - Use `--steps 40+` for multi-screen flows or checkout.
-- On `success: false`, read `summary` to understand what happened; take a fresh screencap to see current state.
+- On `success: false`, read `summary` to understand what happened; send screenshot to see current state.
 - Never auto-retry a checkout run — verify manually first.

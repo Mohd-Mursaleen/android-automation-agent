@@ -17,7 +17,7 @@ class Config:
     )
     CORTEX_MODEL: str = os.environ.get("CORTEX_MODEL", "google/gemini-3-flash-preview")
     SUMMARIZER_MODEL: str = os.environ.get(
-        "SUMMARIZER_MODEL", "google/gemini-3.1-flash-lite-preview"
+        "SUMMARIZER_MODEL", "google/gemini-3-flash-preview"
     )
     FALLBACK_MODEL: str = os.environ.get(
         "FALLBACK_MODEL", "google/gemini-3-flash-preview"

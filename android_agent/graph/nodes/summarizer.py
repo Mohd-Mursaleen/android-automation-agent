@@ -5,7 +5,7 @@ Takes a fresh screenshot after execution and asks a cheap/fast LLM whether
 the screen now reflects what the action was supposed to accomplish.
 Tracks consecutive failures per subgoal; marks it failed after 3 in a row.
 
-LLM: google/gemini-2.0-flash-lite via OpenRouter (fast, cheap, vision).
+LLM: google/gemini-3-flash-preview via OpenRouter (vision).
 """
 
 import json

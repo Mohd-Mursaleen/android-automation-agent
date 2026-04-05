@@ -107,6 +107,27 @@ Default quality is 100 (no compression, no scaling). If quality is reduced,
 
 **Critical**: `uiautomator dump` returns real screen pixels, not compressed-image pixels. The executor node sets `self.executor.image_scale_factor = 1.0` before every tap to prevent double-scaling.
 
+### Vision fallback mode
+
+When `uiautomator dump` returns an empty or very sparse tree (common with popups,
+overlays, WebViews, Flutter, React Native), the Contextor sets `state.ui_tree_available = False`.
+
+In this mode:
+- Cortex switches to vision-based coordinate estimation from the screenshot
+- This is expected behavior, not a bug — many production apps use custom UI layers
+  that are invisible to the Android accessibility tree
+- Cortex will shift coordinates on retry attempts to avoid infinite tap loops
+- The runner has a hard loop breaker: 4 identical taps in a row → forced subgoal failure
+
+### Repetition detection
+
+Two layers of protection against infinite tap loops:
+
+1. **Cortex-level** — the prompt includes recent action history and warns Cortex
+   if it detects 3+ taps at similar coordinates, instructing it to try different approaches
+2. **Runner-level** — hard code check: if the last 4 actions are all TAPs within 50px
+   of each other, the running subgoal is force-failed with a descriptive error
+
 ### Tools available to Cortex
 
 | Tool | Args | Notes |

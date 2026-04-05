@@ -47,6 +47,19 @@ def contextor_node(state: AgentState, executor: AndroidExecutor) -> AgentState:
         )
         state.ui_elements = []
         state.latest_ui_hierarchy = "(UI tree unavailable — using screenshot only)"
+        state.ui_tree_available = False
+
+    # Flag empty or very sparse UI trees — Cortex will use vision fallback
+    if state.ui_tree_available:  # only check if dump didn't already fail
+        clickable_count = sum(1 for e in state.ui_elements if e.get("clickable"))
+        if len(state.ui_elements) < 3 or clickable_count < 2:
+            state.ui_tree_available = False
+            logger.info(
+                f"Contextor: UI tree sparse ({len(state.ui_elements)} elements, "
+                f"{clickable_count} clickable) — vision fallback enabled"
+            )
+        else:
+            state.ui_tree_available = True
 
     # C — Focused app
     try:

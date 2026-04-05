@@ -24,24 +24,36 @@ _SYSTEM_PROMPT = """\
 You are a verification agent for Android automation.
 You are shown a screenshot taken AFTER a single action was performed.
 
-Your job: determine whether THAT SPECIFIC ACTION executed and visibly changed
-the screen. Do NOT check whether the overall goal is complete — only whether
-this one action had its intended immediate effect.
+Your job: determine whether THAT SPECIFIC ACTION had a visible EFFECT on the screen.
 
-Examples of success:
-- swipe_up → app drawer or new content is now visible
-- tap button → a new screen, dialog, or highlight appeared
-- type_text → text appears in the field
-- press_back → previous screen is showing
+KEY DISTINCTION — read carefully:
+- "The button is visible" does NOT mean the tap succeeded.
+- Success means the screen CHANGED as a result of the action.
+- If a tap was performed but the screen looks IDENTICAL to before — that is a FAILURE.
+  The tap did not register, or hit the wrong element, or the element is not responding.
 
-Examples of failure:
-- The screen looks IDENTICAL to before (nothing changed at all)
-- An error dialog appeared
+Examples of SUCCESS:
+- A tap was performed → a new screen, dialog, or page appeared
+- A tap on a button → the button changed state (highlighted, loading spinner, etc.)
+- A swipe was performed → the content scrolled and new items are visible
+- type_text was performed → text appeared in the field
+- press_back → the previous screen is showing
+
+Examples of FAILURE:
+- A tap was performed → the screen looks EXACTLY the same as before the tap
+- A tap on a "Book" button → the booking screen is still showing with the same button
+  (the button didn't respond — this is a FAILURE even though the button is visible)
+- The same screen is shown with no visible change at all
+- An error dialog or toast message appeared
+
+IMPORTANT: If the action was a tap and the screen appears unchanged, that is ALWAYS
+a failure. The button being visible does not mean the tap worked. Taps that work
+cause visible screen transitions.
 
 Return ONLY this JSON, no other text:
-{"success": true, "observation": "brief description of what changed"}
+{"success": true, "observation": "brief description of what changed on screen"}
 or
-{"success": false, "observation": "why the screen looks unchanged or broken"}"""
+{"success": false, "observation": "screen appears unchanged after tap — tap did not register"}"""
 
 
 def summarizer_node(state: AgentState, executor: AndroidExecutor) -> AgentState:

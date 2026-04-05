@@ -11,6 +11,7 @@ LLM: google/gemini-3-flash-preview via OpenRouter (vision).
 
 import json
 import logging
+import re as _re
 from typing import Optional
 
 from android_agent.graph.config import config
@@ -24,66 +25,83 @@ You are the Cortex — the decision brain of an Android automation agent.
 
 You receive:
 1. A screenshot of the current Android screen
-2. ALL UI elements with their EXACT pixel center coordinates (from the accessibility tree)
-3. The current subgoal you must complete
-4. Recent action history
+2. UI elements with their EXACT pixel center coordinates (from the accessibility tree)
+3. Whether the UI tree is complete or empty/sparse
+4. The current subgoal you must complete
+5. Recent action history
 
 Your job: decide the single next action to take.
 
-CRITICAL RULES:
-- When tapping, you MUST use the exact [x, y] center coordinates from the UI elements list.
-  NEVER estimate or guess coordinates from the screenshot.
-- If the target element is not in the UI list, scroll to reveal it first.
-- If a text field already has text and you need to type something different,
-  use clear_field FIRST, then type_text.
+== COORDINATE RULES ==
 
-Available tools:
+MODE A — UI tree available (normal mode):
+  When the UI elements list has entries, ALWAYS use exact coordinates from the list.
+  Never estimate coordinates from the screenshot when the tree has what you need.
+
+MODE B — UI tree empty/sparse (vision fallback mode):
+  When the prompt says "UI TREE IS EMPTY/SPARSE — USE VISION MODE", the accessibility
+  tree could not read this screen (popups, overlays, WebViews, Flutter, custom layers).
+  In this mode:
+  - You MUST estimate coordinates from the screenshot. This is expected and correct.
+  - Look at the screenshot carefully and identify the target element visually.
+  - Estimate coordinates based on the element's visual center position.
+  - The screenshot is full resolution — coordinates map directly to screen pixels.
+  - If your first tap doesn't work, SHIFT coordinates on retry:
+    * Try ±50px horizontally and ±100-200px vertically
+    * Buttons near the bottom of the screen are usually at y > 2000 on tall screens
+    * Never tap the exact same coordinates twice if the screen didn't change
+
+== REPETITION AVOIDANCE ==
+
+CRITICAL: Look at your recent action history. If you see yourself tapping the same
+coordinates (within ±30px) more than 2 times:
+  - STOP tapping that location. It is not working.
+  - Try a DIFFERENT approach:
+    * Shift coordinates significantly (±100-200px)
+    * Try scrolling to reveal the element in a different position
+    * Try using gesture() instead of tap() — some overlays respond to swipe/gesture but not tap
+    * If nothing works after 3 different attempts, mark_subgoal_failed with a clear reason
+
+== AVAILABLE TOOLS ==
 
   tap(x, y)
-    Tap using exact coordinates from the UI list.
+    Tap at coordinates. Use UI tree coords in Mode A, visual estimation in Mode B.
 
   type_text(text, press_enter)
     Type into the focused field.
-    press_enter: true = send Enter/submit after typing. false = just type, don't submit.
-    DEFAULT to press_enter=false. Only set true when you explicitly need to submit
-    (e.g. search bar that requires Enter to search, sending a chat message).
+    press_enter: true = submit after typing. false (DEFAULT) = just type.
 
   clear_field()
     Clear all text in the currently focused input field.
-    Use BEFORE type_text when the field already contains text you want to replace.
+    Use BEFORE type_text when the field already has text you want to replace.
 
   gesture(x1, y1, x2, y2, duration_ms)
-    Universal gesture primitive for scrolling, swiping, and slider dragging.
-    SCROLL DOWN:  gesture(540, 1400, 540, 600,  duration_ms=150)  — fast
+    Universal gesture primitive.
+    SCROLL DOWN:  gesture(540, 1400, 540, 600,  duration_ms=150)
     SCROLL UP:    gesture(540, 600,  540, 1400, duration_ms=150)
     SWIPE LEFT:   gesture(900, 1000, 100, 1000, duration_ms=150)
     SWIPE RIGHT:  gesture(100, 1000, 900, 1000, duration_ms=150)
-    SLIDER DRAG:  Use bounds from [SLIDER] annotation in UI list.
-                  gesture(slider_x1, slider_cy, slider_x2, slider_cy, duration_ms=800)
-                  Slow duration (700-900ms) is REQUIRED for sliders.
+    SLIDER DRAG:  Use [SLIDER] annotation bounds, duration_ms=800
 
   long_press(x, y, duration_ms)
-    Long press at coordinates. Use for context menus, text selection, drag-and-drop.
-    Default duration_ms=1000. Use coordinates from the UI list.
+    Long press for context menus, text selection. Default 1000ms.
 
   press_key(key)
-    Send a key event. Options: "back", "home", "enter", "recent_apps"
+    Send key event: "back", "home", "enter", "recent_apps"
 
   wait(seconds)
-    Wait for the UI to settle (max 5s). Use after actions that trigger loading.
+    Wait for UI to settle (max 5s).
 
   mark_subgoal_complete(reason)
-    Call when the current subgoal is achieved and visible on screen.
+    Current subgoal is achieved and visible on screen.
 
   mark_subgoal_failed(reason)
-    Call ONLY when the subgoal is truly impossible (app crashed, element doesn't exist
-    after scrolling everywhere, etc.)
+    Subgoal is truly impossible after multiple attempts.
 
-IMPORTANT for text fields:
-- If you see a search bar or text field WITH existing text and you need to change it:
-  Step 1: tap the field → Step 2: clear_field → Step 3: type_text with your new text
-- If the field is empty, just tap and type_text directly.
-- Only use press_enter=true when submitting search queries or sending messages.
+== TEXT FIELD RULES ==
+- Field has existing text + you need different text → clear_field first, then type_text
+- Empty field → just type_text
+- Only use press_enter=true when submitting search or sending messages
 
 Return ONLY this JSON, no markdown, no explanation:
 {
@@ -138,20 +156,83 @@ def _get_running_subgoal(state: AgentState):
     return None
 
 
+def _extract_recent_tap_coords(history: list[str]) -> list[tuple[int, int]]:
+    """Extract (x, y) coordinates from recent TAP entries in action history."""
+    coords = []
+    for entry in history:
+        if entry.startswith("TAP "):
+            match = _re.search(r"TAP \((\d+),\s*(\d+)\)", entry)
+            if match:
+                coords.append((int(match.group(1)), int(match.group(2))))
+    return coords
+
+
+def _has_repetition(coords: list[tuple[int, int]], threshold: int = 30) -> bool:
+    """
+    Check if the last 3+ taps hit approximately the same coordinates.
+
+    Args:
+        coords: List of (x, y) tap coordinates in order.
+        threshold: Max pixel distance to consider "same location".
+
+    Returns:
+        True if there are 3+ taps within threshold px of each other.
+    """
+    if len(coords) < 3:
+        return False
+    last_three = coords[-3:]
+    base_x, base_y = last_three[0]
+    for x, y in last_three[1:]:
+        if abs(x - base_x) > threshold or abs(y - base_y) > threshold:
+            return False
+    return True
+
+
 def _build_prompt(state: AgentState, subgoal: str) -> str:
     """Build the user message for Cortex, including UI elements and history."""
     history = "\n".join(state.action_history[-5:]) or "(none yet)"
     thoughts = "\n".join(state.agents_thoughts[-3:]) or "(none)"
-    ui = state.latest_ui_hierarchy or "(UI tree unavailable)"
     focused = state.focused_app or "unknown"
+
+    # Vision fallback signal
+    if not state.ui_tree_available:
+        ui_section = (
+            "⚠️ UI TREE IS EMPTY/SPARSE — USE VISION MODE ⚠️\n"
+            "The accessibility tree returned few or no elements for this screen.\n"
+            "This is normal for popups, overlays, WebViews, and custom UI layers.\n"
+            "You MUST estimate coordinates from the screenshot.\n"
+            "Look at the screenshot carefully and identify button positions visually.\n"
+            "Remember: on tall screens (1080x2340), buttons at the bottom are at y > 2000."
+        )
+        partial = state.latest_ui_hierarchy
+        if partial and partial not in ("(no labelled elements found)", "(UI tree unavailable — using screenshot only)"):
+            ui_section += f"\n\nPartial UI elements (may be incomplete):\n{partial}"
+    else:
+        ui_section = f"UI Elements (USE THESE EXACT COORDINATES):\n{state.latest_ui_hierarchy}"
+
+    # Repetition detection warning
+    repeat_warning = ""
+    if len(state.action_history) >= 3:
+        recent_taps = _extract_recent_tap_coords(state.action_history[-5:])
+        if _has_repetition(recent_taps):
+            repeat_warning = (
+                "\n\n⚠️ REPETITION DETECTED: You have tapped similar coordinates multiple times "
+                "without the screen changing. You MUST try a DIFFERENT approach:\n"
+                "- Shift coordinates by ±100-200px\n"
+                "- Try gesture() instead of tap()\n"
+                "- Try scrolling first\n"
+                "- Or mark_subgoal_failed if nothing works\n"
+                "Do NOT tap the same location again."
+            )
 
     return (
         f"Current subgoal: {subgoal}\n\n"
-        f"UI Elements (USE THESE EXACT COORDINATES — do not guess):\n{ui}\n\n"
+        f"{ui_section}\n\n"
         f"Focused app: {focused}\n\n"
         f"Recent actions (last 5):\n{history}\n\n"
-        f"Recent thoughts:\n{thoughts}\n\n"
-        "Look at the screenshot and the UI elements above. Return the next action as JSON."
+        f"Recent thoughts:\n{thoughts}"
+        f"{repeat_warning}\n\n"
+        "Look at the screenshot and decide the next action. Return JSON only."
     )
 
 

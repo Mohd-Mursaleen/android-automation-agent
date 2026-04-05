@@ -38,6 +38,7 @@ class AgentState:
     latest_ui_hierarchy: Optional[str] = None  # human-readable element list
     ui_elements: list[dict] = field(default_factory=list)
     focused_app: Optional[str] = None
+    ui_tree_available: bool = True  # False when uiautomator dump returned empty/sparse results
 
     # --- Cortex output ---
     structured_decision: Optional[dict] = None  # {tool, args, reason, thought}

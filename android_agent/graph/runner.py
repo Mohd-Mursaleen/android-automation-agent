@@ -10,6 +10,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import time
 
 from android_agent.executor.android import AndroidExecutor
@@ -66,6 +67,45 @@ def _acquire_lock(goal: str) -> bool:
     except IOError:
         logger.error("Failed to write lock file — proceeding anyway")
         return True  # Don't block on I/O failure
+
+
+def _detect_tap_loop(state: AgentState, window: int = 4, threshold: int = 50) -> bool:
+    """
+    Detect if the agent is stuck tapping the same coordinates repeatedly.
+
+    Checks the last `window` actions. If all are TAPs within `threshold` px
+    of each other, returns True.
+
+    Args:
+        state: Current agent state.
+        window: How many recent actions to check.
+        threshold: Max pixel distance to consider "same location".
+
+    Returns:
+        True if a tap loop is detected.
+    """
+    recent = state.action_history[-window:] if len(state.action_history) >= window else []
+    if len(recent) < window:
+        return False
+
+    coords = []
+    for entry in recent:
+        if not entry.startswith("TAP "):
+            return False  # Non-tap breaks the pattern — no loop
+        match = re.search(r"TAP \((\d+),\s*(\d+)\)", entry)
+        if match:
+            coords.append((int(match.group(1)), int(match.group(2))))
+        else:
+            return False
+
+    if len(coords) < window:
+        return False
+
+    base_x, base_y = coords[0]
+    for x, y in coords[1:]:
+        if abs(x - base_x) > threshold or abs(y - base_y) > threshold:
+            return False
+    return True
 
 
 def _release_lock() -> None:
@@ -181,6 +221,22 @@ def run_task(
                     }, _f)
             except Exception:
                 pass
+
+            # Hard repetition breaker — catch infinite tap loops before summarizer
+            if _detect_tap_loop(state):
+                logger.warning("Runner: tap loop detected — forcing subgoal failure")
+                for sg in state.subgoal_plan:
+                    if sg.status == "running":
+                        sg.status = "failed"
+                        sg.failure_reason = (
+                            "Agent stuck in tap loop — tapped same coordinates 4+ times "
+                            "without screen change. The target element may be a popup/overlay "
+                            "that is not responding to taps."
+                        )
+                        state.action_history.append(f"❌ LOOP DETECTED: {sg.description}")
+                        break
+                if verbose:
+                    print("  [loop-break] Forced failure — agent stuck tapping same spot")
 
             state = summarizer_node(state, android_executor)
 

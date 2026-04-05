@@ -340,3 +340,10 @@ Always take a FRESH screenshot. Never use last_screenshot.png from a previous ru
 - Common failure: agent couldn't find an element → it may be off-screen → suggest re-running with "scroll down first, then..."
 - Never auto-retry a checkout run — always verify manually first
 - If the agent keeps failing on the same step, try rephrasing the goal to be simpler/more specific
+- **Popup/overlay buttons not responding**: Some apps (Rapido, Uber, Swiggy) use custom
+  popups that are invisible to the UI accessibility tree. The agent will switch to
+  vision-based tapping automatically. If it still fails, try breaking the task into
+  smaller steps — e.g. separate "select Auto" and "tap Book" into two runs.
+- **Agent stuck tapping same spot**: The system detects tap loops and auto-fails after
+  4 identical taps. If this happens, the target element may need a different interaction
+  (long_press, gesture, or scroll to reveal it in a different position).

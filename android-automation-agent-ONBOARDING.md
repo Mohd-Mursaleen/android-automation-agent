@@ -165,7 +165,7 @@ cd ~/android-automation-agent && python run.py "Open Settings" --steps 10 --json
 ## 📜 Summary of Principles
 
 - **Cleanup First:** Always run `kill_monitors.sh` before a new run to ensure fresh logs and no zombie processes.
-- **Wake First:** Always run `wake_and_unlock.sh` so the screen is active before the agent starts taking screenshots.
+- **Wake First:** Always run `wake_and_unlock.sh` before automation. The script is smart — it only wakes/unlocks if needed and never presses Home, so the current app stays in foreground for follow-up tasks.
 - **Monitors Always On:** Never run the agent without both `monitor_result.sh` and `monitor_progress.sh` running — they are the only delivery path for results and screenshots back to the user.
 - **Exact Intent:** Pass the user's goal string to `run.py` without substituting words, adding brand names, or guessing app flows. See SKILL.md Section 1 (Golden Rules).
 - **Decompose Complex Tasks:** Break multi-step flows into separate `run.py` calls, verifying each result before proceeding to the next. Never run checkout/payment without user confirmation.

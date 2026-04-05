@@ -244,6 +244,25 @@ Include that context at the START of the new goal, then append the user's curren
 - Bad: "complete checkout"
 - Good: "Nandini milk is already in the Blinkit cart. Open Blinkit, go to cart, proceed to checkout"
 
+### Fresh tasks vs follow-up tasks
+
+**Fresh task** = user names an app or starts a new workflow from scratch.
+- Examples: "Open Uber", "Search for shoes on Amazon", "Check my Gmail"
+- The goal string should start with "Open [app]" — the agent will navigate from whatever is on screen.
+
+**Follow-up task** = user continues a workflow that's already on screen.
+- Examples: "book it", "confirm the order", "select the cheapest option", "go ahead"
+- The goal string should describe the CURRENT screen state + what to do next.
+- The wake script will NOT press Home or Back — the app stays exactly where it was.
+- Example goal: "Rapido ride booking screen is showing with ride details. Tap the Book Now button."
+
+**How to detect follow-up tasks:**
+1. The user's message implies continuation ("do it", "confirm", "book it", "go ahead", "next", "order")
+2. There is a recent `last_result.json` (check modified time — if less than 10 minutes old, it's relevant)
+3. The previous task succeeded (`success: true`)
+
+When all three are true → this is a follow-up. Read `last_result.json` for context and construct the goal accordingly. Do NOT add "Open [app]" — the app is already open.
+
 ### If ambiguous → ASK. Do not guess.
 
 ---

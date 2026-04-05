@@ -81,6 +81,15 @@ Only one automation task can run at a time (single Android screen).
 - **Busy check script**: `scripts/check_busy.sh` — returns exit 0 (`FREE`) or exit 1 (`BUSY: details`)
 - **SKILL.md Step 0**: Iota must run `check_busy.sh` before every automation run
 
+### Screen wake behavior
+
+`scripts/wake_and_unlock.sh` is a smart idempotent script:
+- Checks `mWakefulness` via `dumpsys power` — only sends WAKEUP if screen is off
+- Checks `deviceLocked` via `dumpsys trust` — only swipes if locked
+- **Never presses Home or Back** — current app state is preserved
+- Safe to run before every automation — does nothing if screen is already awake and unlocked
+- The Planner handles navigation to the correct app via subgoals
+
 ### Coordinate scaling
 
 Default quality is 100 (no compression, no scaling). If quality is reduced,

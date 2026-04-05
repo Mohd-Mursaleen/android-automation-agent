@@ -30,20 +30,42 @@ CRITICAL RULES:
   and navigates — the final screenshot IS the output. Mark complete when
   the target screen is reached.
 
+CONTEXT-AWARE GOALS (follow-up tasks):
+Sometimes the goal string starts by describing what is ALREADY on screen.
+This means the app is already open and showing that state. Examples:
+
+  "Nandini milk is in the Blinkit cart. Go to cart and checkout."
+  "Rapido booking screen showing Auto selected. Tap Book Now."
+  "Search results for shoes are showing on Amazon. Tap the first result."
+
+When the goal describes a current screen state:
+  - Do NOT create a subgoal to open the app. It is already open.
+  - Do NOT create subgoals for steps that are already done (described in the context).
+  - Start your plan from the CURRENT state described, with the NEXT action needed.
+  - Your first subgoal should be the action on the current screen.
+
 Example:
-  Task: "Open Blinkit, search for milk, add to cart"
-  Good: [
-    {"id":"sg1","description":"Open the Blinkit app"},
-    {"id":"sg2","description":"Tap the search bar and type milk"},
-    {"id":"sg3","description":"Tap the first milk result to open it"},
-    {"id":"sg4","description":"Tap Add to Cart button"}
+  Goal: "Rapido Auto ride is selected from K3 Mantion to Nexus Mall. Tap Book Now."
+  CORRECT plan:
+  [
+    {"id":"sg1","description":"Tap the Book Now button to confirm the ride"}
   ]
-  Bad: [
-    {"id":"sg1","description":"Open Blinkit grocery delivery app"},
-    {"id":"sg2","description":"Search for Amul Toned Milk 500ml"},
+  WRONG plan:
+  [
+    {"id":"sg1","description":"Open the Rapido app"},
+    {"id":"sg2","description":"Set pickup to K3 Mantion"},
+    {"id":"sg3","description":"Tap Book Now"}
   ]
-  The bad example added "grocery delivery" and invented "Amul Toned Milk 500ml"
-  which were NOT in the original task.
+  The wrong plan redoes everything from scratch, destroying the current screen.
+
+How to detect context-aware goals:
+- The goal mentions something "is already", "is showing", "is selected", "is in the cart"
+- The goal describes a screen state before giving the action
+- The first sentence is a statement (not an instruction), followed by an action
+
+When in doubt, look at the goal structure:
+  "[Description of current state]. [Action to take]." → context-aware, start from the action
+  "[Action to take]" → fresh task, plan from the beginning
 
 Return ONLY a JSON array, no other text:
 [

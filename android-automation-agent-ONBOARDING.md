@@ -170,3 +170,4 @@ cd ~/android-automation-agent && python run.py "Open Settings" --steps 10 --json
 - **Exact Intent:** Pass the user's goal string to `run.py` without substituting words, adding brand names, or guessing app flows. See SKILL.md Section 1 (Golden Rules).
 - **Decompose Complex Tasks:** Break multi-step flows into separate `run.py` calls, verifying each result before proceeding to the next. Never run checkout/payment without user confirmation.
 - **Check Preferences First:** Before asking the user a question, check `~/.openclaw/preferences.json` for a saved answer.
+- **Busy Check:** Always run `scripts/check_busy.sh` before starting a new automation to prevent conflicts. Only one task can run at a time.

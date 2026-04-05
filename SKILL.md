@@ -134,6 +134,38 @@ Adapt the above pattern for whatever preference you're saving.
 
 ALWAYS follow this exact flow. Never deviate.
 
+### Step 0 — Check if the agent is busy
+
+Before ANYTHING else, check if a task is already running:
+
+```bash
+bash ~/android-automation-agent/scripts/check_busy.sh
+```
+
+- If output is `FREE` → proceed to Step 1.
+- If output starts with `BUSY:` → tell the user:
+  "I'm currently running: [task details from output]. Wait for it to finish, or tell me to cancel it so I can start your new task."
+- Do NOT proceed to Step 1 if busy. Do NOT kill monitors or start a new run.
+
+### Cancelling a running task
+
+If the user says "cancel it", "stop", or "kill the current task":
+
+```bash
+LOCK_FILE="$HOME/storage/shared/android_agent/agent.lock"
+if [ -f "$LOCK_FILE" ]; then
+    PID=$(python3 -c "import json; print(json.load(open('$LOCK_FILE')).get('pid',''))" 2>/dev/null)
+    if [ -n "$PID" ]; then
+        kill "$PID" 2>/dev/null
+        sleep 2
+    fi
+    rm -f "$LOCK_FILE"
+fi
+bash ~/android-automation-agent/scripts/kill_monitors.sh
+```
+
+Then tell the user: "Cancelled. Ready for your next task."
+
 ### Step 1 — Kill old monitors, start fresh ones
 
 Ensure BOT_TOKEN and CHAT_ID are exported.

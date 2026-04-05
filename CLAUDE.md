@@ -70,6 +70,17 @@ while True:
     state = summarizer_node(state, executor) # verify action worked
 ```
 
+### Lock / mutex system
+
+Only one automation task can run at a time (single Android screen).
+
+- **Lock file**: `~/storage/shared/android_agent/agent.lock`
+- **Contents**: JSON with `pid`, `goal`, `started_at`
+- **Acquired** by `run_task()` at start, **released** at end (including on crash via try/finally)
+- **Stale detection**: If the lock file exists but the PID is dead, the lock is automatically cleaned
+- **Busy check script**: `scripts/check_busy.sh` — returns exit 0 (`FREE`) or exit 1 (`BUSY: details`)
+- **SKILL.md Step 0**: Iota must run `check_busy.sh` before every automation run
+
 ### Coordinate scaling
 
 Default quality is 100 (no compression, no scaling). If quality is reduced,

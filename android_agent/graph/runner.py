@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def run_task(
     goal: str,
     max_steps: int = 25,
-    quality: int = 75,
+    quality: int = 100,
     verbose: bool = True,
     device_id: str = None,
 ) -> AgentState:

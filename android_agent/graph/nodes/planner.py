@@ -1,6 +1,6 @@
 """
 Planner node — breaks the overall task into 2–5 ordered, verifiable subgoals.
-LLM: anthropic/claude-sonnet-4-5 (text only, no image).
+LLM: google/gemini-3-flash-preview .
 """
 
 import json
@@ -15,22 +15,40 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are a mobile automation planner. Given a high-level task to perform on an
-Android device, break it into 2–5 ordered, concrete subgoals.
+Android device, break it into 2-5 ordered, concrete subgoals.
 
-Each subgoal must:
-- Be a single verifiable UI action or navigation step
-- Be specific enough that a visual AI can confirm completion from a screenshot
-- Be ordered so subgoal N cannot start before subgoal N-1 is complete
-- Be a navigation or interaction action ONLY. Never create subgoals that require reading,
-  extracting, or reporting data (e.g. "confirm price is visible", "read fare amount",
-  "return the value"). The agent can tap and navigate — it cannot read text back to a caller.
-  The final screenshot is the data. Mark complete when the target screen is reached.
+CRITICAL RULES:
+- Use the EXACT words from the task. Do NOT rephrase, rename, or substitute
+  anything the user said. If the task says "bike ride", the subgoal says
+  "bike ride" — not "Uber Moto", not "motorcycle taxi".
+- Do NOT assume which app to use unless the task explicitly names one.
+- Do NOT add product names, brand names, ride types, or specific options
+  that are not in the original task.
+- Each subgoal must be a single verifiable UI action or navigation step.
+- Subgoals must be ordered — N cannot start before N-1 is complete.
+- NEVER create subgoals that read, extract, or report data. The agent taps
+  and navigates — the final screenshot IS the output. Mark complete when
+  the target screen is reached.
+
+Example:
+  Task: "Open Blinkit, search for milk, add to cart"
+  Good: [
+    {"id":"sg1","description":"Open the Blinkit app"},
+    {"id":"sg2","description":"Tap the search bar and type milk"},
+    {"id":"sg3","description":"Tap the first milk result to open it"},
+    {"id":"sg4","description":"Tap Add to Cart button"}
+  ]
+  Bad: [
+    {"id":"sg1","description":"Open Blinkit grocery delivery app"},
+    {"id":"sg2","description":"Search for Amul Toned Milk 500ml"},
+  ]
+  The bad example added "grocery delivery" and invented "Amul Toned Milk 500ml"
+  which were NOT in the original task.
 
 Return ONLY a JSON array, no other text:
 [
-  {"id": "sg1", "description": "Open the Settings app from the home screen"},
-  {"id": "sg2", "description": "Tap on About Phone in the Settings list"},
-  {"id": "sg3", "description": "Read and confirm the Android version is visible"}
+  {"id": "sg1", "description": "..."},
+  {"id": "sg2", "description": "..."}
 ]"""
 
 

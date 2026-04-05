@@ -69,21 +69,81 @@ class AndroidExecutor(Executor):
             logger.exception("Error in press_key")
             return False
 
-    def type_text(self, text: str, observation: str) -> bool:
+    def type_text(self, text: str, observation: str, press_enter: bool = False) -> bool:
+        """
+        Type text into the focused field.
+
+        Args:
+            text: Text to type. Newlines within the text send keyevent 66 for each blank line.
+            observation: Human-readable context for logging.
+            press_enter: If True, sends keyevent 66 (Enter) after typing. Default False.
+
+        Returns:
+            True on success, False on exception.
+        """
         try:
-            logger.debug(f"type text {text}")
+            logger.debug(f"type text {text!r} press_enter={press_enter}")
             multiline_texts = text.split("\n")
-            for text in multiline_texts:
-                if text == "":  # due to newline
+            for line in multiline_texts:
+                if line == "":  # blank line within multiline text = newline key
                     run_adb_command(["shell", "input", "keyevent", "66"])
                 else:
-                    sanitized_text = sanitize_for_adb(text)
+                    sanitized_text = sanitize_for_adb(line)
                     run_adb_command(["shell", "input", "text", sanitized_text])
-            # todo confirm if needed
-            run_adb_command(["shell", "input", "keyevent", "66"])
+            if press_enter:
+                run_adb_command(["shell", "input", "keyevent", "66"])
             return True
         except Exception as e:
             logger.exception("Error in type_text")
+            return False
+
+    def clear_focused_field(self, observation: str) -> bool:
+        """
+        Clear all text in the currently focused input field.
+        Uses MOVE_END + repeated DEL (backspace). Slow but universally reliable.
+
+        Args:
+            observation: Human-readable context for logging.
+
+        Returns:
+            True on success, False on exception.
+        """
+        try:
+            logger.debug("clear focused field")
+            # Move cursor to the very end of the field
+            run_adb_command(["shell", "input", "keyevent", "KEYCODE_MOVE_END"])
+            # Send 80 backspaces — enough for any reasonable text field
+            for _ in range(80):
+                run_adb_command(["shell", "input", "keyevent", "KEYCODE_DEL"])
+            return True
+        except Exception as e:
+            logger.exception("Error in clear_focused_field")
+            return False
+
+    def long_press_at_a_point(self, x: int, y: int, observation: str, duration: int = 1000) -> bool:
+        """
+        Long press at coordinates. Implemented as a zero-distance swipe with long duration.
+
+        Args:
+            x: X coordinate (subject to image_scale_factor).
+            y: Y coordinate (subject to image_scale_factor).
+            observation: Human-readable context for logging.
+            duration: Duration in milliseconds (default 1000).
+
+        Returns:
+            True on success, False on exception.
+        """
+        try:
+            scaled_x = int(x * self.image_scale_factor)
+            scaled_y = int(y * self.image_scale_factor)
+            logger.debug(f"Long press at a point x y {x} {y} for duration {duration}")
+            run_adb_command(["shell", "input", "swipe",
+                             str(scaled_x), str(scaled_y),
+                             str(scaled_x), str(scaled_y),
+                             str(duration)])
+            return True
+        except Exception as e:
+            logger.exception("Error in long_press_at_a_point")
             return False
 
     def scroll(self, clicks: int, observation: str) -> bool:

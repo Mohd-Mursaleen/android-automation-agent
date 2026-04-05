@@ -35,6 +35,7 @@ python run.py "Open Instamart, add milk to cart" --steps 40 --quiet
 #   --device ID   ADB serial (auto-detected if omitted)
 #   --quiet       suppress step-by-step output
 #   --check       run health check only, then exit
+#   --quality N   screenshot quality (default 100, no compression)
 ```
 
 **Testing:**
@@ -48,7 +49,7 @@ pytest tests/test_android.py
 
 Three-component pipeline per action cycle:
 
-1. **Executor** (`executor/android.py`) — takes a screenshot via `adb exec-out screencap -p`, compresses it by `image_quality` percent, returns base64. All ADB taps/swipes/types go through here. **Do not modify this file.**
+1. **Executor** (`executor/android.py`) — takes a screenshot via `adb exec-out screencap -p`, compresses it by `image_quality` percent, returns base64. All ADB taps/swipes/types go through here.
 2. **Planner** (`graph/nodes/planner.py`) — text-only LLM; breaks the goal into 2–5 ordered subgoals as JSON.
 3. **Cortex** (`graph/nodes/cortex.py`) — vision LLM; receives screenshot + UI element list from Contextor, returns one JSON action.
 
@@ -71,9 +72,24 @@ while True:
 
 ### Coordinate scaling
 
+Default quality is 100 (no compression, no scaling). If quality is reduced,
 `AndroidExecutor.image_scale_factor = 100 / quality`. When screenshots are compressed to N% of original size, coordinates from visual analysis are in that smaller space. `click_at_a_point` multiplies by `image_scale_factor` to hit the correct physical pixels.
 
 **Critical**: `uiautomator dump` returns real screen pixels, not compressed-image pixels. The executor node sets `self.executor.image_scale_factor = 1.0` before every tap to prevent double-scaling.
+
+### Tools available to Cortex
+
+| Tool | Args | Notes |
+|------|------|-------|
+| tap | x, y | MUST use UI tree coordinates |
+| type_text | text, press_enter | press_enter defaults to false. Only true for search submit / message send |
+| clear_field | (none) | Clears focused text field via backspaces. Use before type_text on non-empty fields |
+| gesture | x1, y1, x2, y2, duration_ms | Scroll, swipe, slider drag |
+| long_press | x, y, duration_ms | Context menus, text selection. Default 1000ms |
+| press_key | key | "back", "home", "enter", "recent_apps" |
+| wait | seconds | Max 5s. Use after loading triggers |
+| mark_subgoal_complete | reason | When subgoal is done |
+| mark_subgoal_failed | reason | When subgoal is impossible |
 
 ### Gesture primitive
 
@@ -92,7 +108,7 @@ android_agent/
 ├── openrouter.py          # vision_completion() and text_completion() — all LLM I/O
 ├── executor/
 │   ├── __init__.py        # Abstract Executor base class
-│   └── android.py         # ADB-based implementation — DO NOT MODIFY
+│   └── android.py         # ADB-based implementation
 ├── graph/
 │   ├── config.py          # Config class (reads from env)
 │   ├── state.py           # AgentState + Subgoal dataclasses
@@ -114,4 +130,4 @@ android_agent/
 - **No Rust/C++ deps** — pure Python only; no `pyautogui`, `gradio`, `mlx`, `anthropic`, `google-generativeai`, `ollama`
 - **OpenRouter only** — all LLM calls use `openai>=1.0.0` SDK with `base_url=https://openrouter.ai/api/v1`
 - **Android only** — `executor/android.py` is the only executor
-- **Do not touch `executor/android.py`** — it is the stable ADB interface
+- **executor/android.py** — the stable ADB interface. Modify carefully and test after changes.

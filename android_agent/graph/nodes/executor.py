@@ -77,8 +77,20 @@ class ExecutorNode:
 
         elif tool == "type_text":
             text = args.get("text", "")
-            self.executor.type_text(text, reason)
-            state.action_history.append(f"TYPE {text!r}")
+            press_enter = args.get("press_enter", False)
+            self.executor.type_text(text, reason, press_enter=press_enter)
+            state.action_history.append(f"TYPE {text!r} (enter={press_enter})")
+
+        elif tool == "clear_field":
+            self.executor.clear_focused_field(reason)
+            state.action_history.append("CLEAR FIELD")
+
+        elif tool == "long_press":
+            x, y = int(args.get("x", 0)), int(args.get("y", 0))
+            duration = int(args.get("duration_ms", 1000))
+            self.executor.image_scale_factor = 1.0
+            self.executor.long_press_at_a_point(x, y, reason, duration=duration)
+            state.action_history.append(f"LONG_PRESS ({x}, {y}) {duration}ms — {reason}")
 
         elif tool == "gesture":
             x1 = int(args.get("x1", 0))

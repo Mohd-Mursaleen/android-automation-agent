@@ -20,101 +20,19 @@ Quick start
 Run pattern — Background Run & Auto-Notify
 ALWAYS follow this flow. Never deviate.
 
-Step 1 — Start the result monitor FIRST (before running the agent):
+Step 1 — Start the monitors FIRST (before running the agent):
+
+Ensure BOT_TOKEN and CHAT_ID are already exported.
 
 ```
-exec yieldMs=500 command='BOT_TOKEN="YOUR_BOT_TOKEN"
-CHAT_ID="YOUR_CHAT_ID"
-RESULT_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json"
-SCREENSHOT="/data/data/com.termux/files/home/storage/shared/android_agent/last_screenshot.png"
-while true; do
-  if [ -f "$RESULT_FILE" ]; then
-    MTIME=$(stat -c %Y "$RESULT_FILE")
-    NOW=$(date +%s)
-    if [ $((NOW - MTIME)) -lt 60 ]; then
-      sleep 4
-      GOAL=$(python3 - <<PYEOF
-import json
-try:
-    d = json.load(open("$RESULT_FILE"))
-    print(d.get("goal", ""))
-except:
-    pass
-PYEOF
-)
-      SUCCESS=$(python3 - <<PYEOF
-import json
-try:
-    d = json.load(open("$RESULT_FILE"))
-    print("✅" if d["success"] else "❌")
-except:
-    pass
-PYEOF
-)
-      SUMMARY=$(python3 - <<PYEOF
-import json
-try:
-    d = json.load(open("$RESULT_FILE"))
-    print(d.get("summary", "") + "\nSteps: " + str(d.get("steps", "?")))
-except:
-    pass
-PYEOF
-)
-      curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${CHAT_ID}" \
-        --data-urlencode "text=${SUCCESS} Task done: ${GOAL}
-${SUMMARY}"
-      curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
-        -F "chat_id=${CHAT_ID}" \
-        -F "document=@${SCREENSHOT}"
-      break
-    fi
-  fi
-  sleep 15
-done'
+exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_result.sh'
 ```
 
 Step 1b — Kill any previous progress loop, then start a new one:
 
 ```
-PID_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/progress.pid"
-[ -f "$PID_FILE" ] && kill $(cat "$PID_FILE") 2>/dev/null; rm -f "$PID_FILE"
-```
-
-```
-exec yieldMs=500 command='BOT_TOKEN="YOUR_BOT_TOKEN"
-CHAT_ID="YOUR_CHAT_ID"
-STEP_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_step.json"
-RESULT_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json"
-PID_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/progress.pid"
-echo $$ > "$PID_FILE"
-while true; do
-  sleep 15
-  if [ -f "$RESULT_FILE" ]; then
-    MTIME=$(stat -c %Y "$RESULT_FILE")
-    NOW=$(date +%s)
-    if [ $((NOW - MTIME)) -lt 90 ]; then
-      break
-    fi
-  fi
-  if [ -f "$STEP_FILE" ]; then
-    STEP=$(python3 - <<PYEOF
-import json
-try:
-    d = json.load(open("$STEP_FILE"))
-    print("Step " + str(d["step"]) + " - " + str(d["last_action"]) + " (" + str(d["elapsed_seconds"]) + "s elapsed)")
-except:
-    pass
-PYEOF
-)
-    if [ -n "$STEP" ]; then
-      curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${CHAT_ID}" \
-        --data-urlencode "text=⏳ ${STEP}"
-    fi
-  fi
-done
-rm -f "$PID_FILE"'
+bash ~/android-automation-agent/scripts/kill_monitors.sh && \
+exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_progress.sh'
 ```
 
 Step 2 — Tell the user and run the agent:
@@ -122,14 +40,15 @@ Step 2 — Tell the user and run the agent:
 Tell user: "Task started. Goal: '<goal string used>'. Sending live updates every 15s."
 
 ```
+bash /data/data/com.termux/files/home/wake_and_unlock.sh && \
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
 ```
 
 Then immediately send this Telegram message (before ending your turn):
 
 ```
-curl -s -X POST "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage" \
-  -d "chat_id=YOUR_CHAT_ID" \
+curl -s -X POST "https://api.telegram.org/bot8761136163:AAFNPOCGsPXzMPoc0uYlwT1yrUSedtE-pKo/sendMessage" \
+  -d "chat_id=1347554961" \
   --data-urlencode "text=🤖 Agent started: <exact goal string>"
 ```
 
@@ -151,8 +70,8 @@ When user asks "what's on screen?", "what's happening?", or "show me the phone":
 
 ```
 adb exec-out screencap -p > /tmp/screen.png
-curl -s -X POST "https://api.telegram.org/botYOUR_BOT_TOKEN/sendDocument" \
-  -F "chat_id=YOUR_CHAT_ID" \
+curl -s -X POST "https://api.telegram.org/bot8761136163:AAFNPOCGsPXzMPoc0uYlwT1yrUSedtE-pKo/sendDocument" \
+  -F "chat_id=1347554961" \
   -F "document=@/tmp/screen.png"
 ```
 

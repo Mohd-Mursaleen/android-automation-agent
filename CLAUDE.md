@@ -81,15 +81,26 @@ Only one automation task can run at a time (single Android screen).
 - **Busy check script**: `scripts/check_busy.sh` — returns exit 0 (`FREE`) or exit 1 (`BUSY: details`)
 - **SKILL.md Step 0**: Iota must run `check_busy.sh` before every automation run
 
-### Monitor scripts
+### Monitoring & Telegram notifications
 
-Two background monitors send live updates to Telegram:
+The automation sends three types of Telegram notifications:
 
-- `monitor_progress.sh` — sends step updates every 15s while agent runs. PID tracked in `progress.pid`.
-- `monitor_result.sh` — waits for `last_result.json`, sends final summary + screenshot. PID tracked in `result.pid`.
-- `kill_monitors.sh` — kills both by PID, fallback `pkill` for orphans, clears state files.
+1. **Start notification** — sent by `run.py` immediately when automation begins.
+   Includes goal string and max steps. Fires before the planner even runs.
 
-Both monitors self-cleanup: on startup they kill any previous instance of themselves before registering their new PID. This prevents duplicate notifications.
+2. **Progress updates (every 45s)** — sent by `monitor_progress.sh`.
+   Each update includes a fresh screenshot of the phone + caption with:
+   step number, elapsed time, last action, and goal.
+   The monitor auto-exits when `last_result.json` is written.
+
+3. **Final result** — sent by `run.py` when automation completes.
+   Includes success/failure emoji, summary, step count, and final screenshot.
+   `monitor_result.sh` acts as safety net — waits 8s after result file appears,
+   then sends the screenshot as a document if `run.py` crashed before notifying.
+
+Monitor scripts write PIDs to `progress.pid` and `result.pid`.
+Both self-cleanup: on startup they kill any previous instance before registering.
+`kill_monitors.sh` kills both by PID and has `pkill` fallback for orphans.
 
 ### Screen wake behavior
 

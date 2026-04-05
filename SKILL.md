@@ -184,17 +184,16 @@ exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_progre
 
 ### Step 2 — Wake the device, then run the agent
 
+Tell user: "Task started. Goal: '<goal string used>'. You'll get screenshot updates every 45s."
+
 ```bash
 bash ~/android-automation-agent/scripts/wake_and_unlock.sh && \
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
 ```
 
-Then immediately notify:
-```bash
-curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-  -d "chat_id=${CHAT_ID}" \
-  --data-urlencode "text=🤖 Agent started: <exact goal string>"
-```
+The agent sends a "🤖 Android Agent started" notification to Telegram automatically
+when it begins, and a final result notification with screenshot when it finishes.
+You do not need to send any manual curl notifications.
 
 ### Step 3 — End your turn. Monitors deliver the result + screenshot.
 

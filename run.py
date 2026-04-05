@@ -29,6 +29,38 @@ _RESULT_PATH = os.path.join(_ARTIFACT_DIR, "last_result.json")
 _SCREENSHOT_PATH = os.path.join(_ARTIFACT_DIR, "last_screenshot.png")
 
 
+def _send_telegram(text: str, photo_path: str = None) -> None:
+    """
+    Best-effort Telegram notification. Requires BOT_TOKEN and CHAT_ID env vars.
+    Never raises — silently fails if env vars are missing or network is down.
+
+    Args:
+        text: Message text or photo caption (truncated to 1024 chars for captions).
+        photo_path: Optional path to a PNG/JPG to send as a photo. If None, sends text only.
+    """
+    import requests as _req
+    bot_token = os.environ.get("BOT_TOKEN", "")
+    chat_id = os.environ.get("CHAT_ID", "")
+    if not bot_token or not chat_id:
+        return
+    try:
+        if photo_path and os.path.exists(photo_path):
+            _req.post(
+                f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+                data={"chat_id": chat_id, "caption": text[:1024]},
+                files={"photo": open(photo_path, "rb")},
+                timeout=15,
+            )
+        else:
+            _req.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                data={"chat_id": chat_id, "text": text},
+                timeout=10,
+            )
+    except Exception:
+        pass
+
+
 def _build_summary(state) -> str:
     """
     Build a human-readable summary from final agent state.
@@ -154,6 +186,9 @@ Examples:
 
     from android_agent.graph.runner import run_task
 
+    # Notify Telegram that automation is starting (fires before any ADB action)
+    _send_telegram(f"🤖 Android Agent started\nGoal: {args.goal}\nMax steps: {args.steps}")
+
     state = run_task(
         goal=args.goal,
         max_steps=args.steps,
@@ -185,6 +220,16 @@ Examples:
 
     # Write artifacts after every run — always, not just in JSON mode
     _write_artifacts(state, result)
+
+    # Send final result to Telegram with screenshot
+    status_emoji = "✅" if state.task_complete else "❌"
+    final_text = (
+        f"{status_emoji} Automation finished\n"
+        f"Goal: {args.goal}\n"
+        f"Steps: {state.step_count}\n"
+        f"{result.get('summary', '')}"
+    )
+    _send_telegram(final_text, _SCREENSHOT_PATH if state.latest_screenshot_b64 else None)
 
     if args.json_mode:
         print(json.dumps(result))

@@ -5,6 +5,10 @@ if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
 
+# Result monitor — safety net that sends final result if run.py didn't.
+# Normally run.py sends the final notification itself. This catches edge cases
+# where run.py crashes after writing last_result.json but before sending Telegram.
+
 RESULT_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json"
 SCREENSHOT="/data/data/com.termux/files/home/storage/shared/android_agent/last_screenshot.png"
 LOG_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/monitor.log"
@@ -26,46 +30,29 @@ echo "[$(date)] Result monitor started (PID: $$)" >> "$LOG_FILE"
 
 while true; do
     if [ -f "$RESULT_FILE" ]; then
-        MTIME=$(stat -c %Y "$RESULT_FILE")
+        MTIME=$(stat -c %Y "$RESULT_FILE" 2>/dev/null || echo 0)
         NOW=$(date +%s)
         if [ $((NOW - MTIME)) -lt 60 ]; then
-            sleep 4
-            GOAL=$(python3 -c "
+            # Wait — give run.py time to send its own notification first
+            sleep 8
+
+            echo "[$(date)] Result detected (safety net)" >> "$LOG_FILE"
+
+            # Send screenshot as document (full quality, not compressed as photo)
+            if [ -f "$SCREENSHOT" ] && [ -s "$SCREENSHOT" ]; then
+                CAPTION=$(python3 -c "
 import json
 try:
     d = json.load(open('$RESULT_FILE'))
-    print(d.get('goal', ''))
+    s = '✅' if d['success'] else '❌'
+    print(f'{s} {d.get(\"summary\", \"Task finished\")}\nSteps: {d.get(\"steps\", \"?\")}')
 except:
-    pass
+    print('Task finished')
 " 2>/dev/null)
-            SUCCESS=$(python3 -c "
-import json
-try:
-    d = json.load(open('$RESULT_FILE'))
-    print('✅' if d['success'] else '❌')
-except:
-    pass
-" 2>/dev/null)
-            SUMMARY=$(python3 -c "
-import json
-try:
-    d = json.load(open('$RESULT_FILE'))
-    print(d.get('summary', '') + '\nSteps: ' + str(d.get('steps', '?')))
-except:
-    pass
-" 2>/dev/null)
-
-            echo "[$(date)] Task completed: $GOAL" >> "$LOG_FILE"
-
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-                -d "chat_id=${CHAT_ID}" \
-                --data-urlencode "text=${SUCCESS} Task done: ${GOAL}
-${SUMMARY}"
-
-            if [ -f "$SCREENSHOT" ]; then
                 curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
                     -F "chat_id=${CHAT_ID}" \
-                    -F "document=@${SCREENSHOT}"
+                    -F "document=@${SCREENSHOT}" \
+                    -F "caption=${CAPTION}"
             fi
 
             break
@@ -74,6 +61,6 @@ ${SUMMARY}"
     sleep 15
 done
 
-# Cleanup our PID file
+# Cleanup
 rm -f "$PID_FILE"
 echo "[$(date)] Result monitor exited (PID: $$)" >> "$LOG_FILE"

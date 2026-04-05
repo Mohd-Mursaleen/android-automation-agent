@@ -28,7 +28,7 @@ Ensure BOT_TOKEN and CHAT_ID are already exported.
 exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_result.sh'
 ```
 
-Step 1b — Kill any previous progress loop, then start a new one:
+Step 1b — Kill any previous progress loop, then start a new one (Clears old logs):
 
 ```
 bash ~/android-automation-agent/scripts/kill_monitors.sh && \
@@ -40,15 +40,15 @@ Step 2 — Tell the user and run the agent:
 Tell user: "Task started. Goal: '<goal string used>'. Sending live updates every 15s."
 
 ```
-bash /data/data/com.termux/files/home/wake_and_unlock.sh && \
+bash ~/android-automation-agent/scripts/wake_and_unlock.sh && \
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
 ```
 
 Then immediately send this Telegram message (before ending your turn):
 
 ```
-curl -s -X POST "https://api.telegram.org/bot8761136163:AAFNPOCGsPXzMPoc0uYlwT1yrUSedtE-pKo/sendMessage" \
-  -d "chat_id=1347554961" \
+curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+  -d "chat_id=${CHAT_ID}" \
   --data-urlencode "text=🤖 Agent started: <exact goal string>"
 ```
 
@@ -61,7 +61,7 @@ Hard rules
 - Never use sessions_yield — models ignore it.
 - Never use background=true + notifyOnExit — heartbeats fire into dead sessions.
 - Never promise "I'll notify you" without the monitor already running.
-- Always run the screen unlock script before the agent.
+- Always run the screen unlock script (`wake_and_unlock.sh`) before the agent.
 
 ---
 
@@ -70,8 +70,8 @@ When user asks "what's on screen?", "what's happening?", or "show me the phone":
 
 ```
 adb exec-out screencap -p > /tmp/screen.png
-curl -s -X POST "https://api.telegram.org/bot8761136163:AAFNPOCGsPXzMPoc0uYlwT1yrUSedtE-pKo/sendDocument" \
-  -F "chat_id=1347554961" \
+curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
+  -F "chat_id=${CHAT_ID}" \
   -F "document=@/tmp/screen.png"
 ```
 

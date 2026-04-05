@@ -57,12 +57,13 @@ If a preference exists, use it silently. If not, ask, then offer to save it.
 
 ### Rule 4: Break complex tasks into separate runs
 
-The android agent is good at simple-to-medium tasks (open app, search, tap, add to cart).
-It struggles with long multi-screen flows done in one shot.
+The android agent handles simple-to-medium tasks best. For complex multi-step workflows,
+decompose into sequential atomic runs for higher success rates.
 
-**Always decompose complex tasks into sequential atomic runs.**
 Run each step separately. Check the result JSON between each run.
-Only proceed to the next step after confirming the previous one succeeded.
+If a step fails, try a different approach or re-run it.
+If a step succeeds, proceed to the next step immediately — do not stop to ask the user.
+The goal is full task completion with zero user intervention after the initial request.
 
 ---
 
@@ -130,6 +131,43 @@ Adapt the above pattern for whatever preference you're saving.
 
 ---
 
+## SECTION 2.5 — Smart Pre-flight: Think Before You Act
+
+Before constructing the goal string or starting any run, reason through the task:
+
+### 1. What is the user actually asking for?
+
+Read the request literally. Do not embellish. Do not substitute brand names.
+If it's ambiguous — not missing info, just unclear intent — pick the most natural interpretation and proceed.
+
+### 2. Is this a fresh task or a follow-up?
+
+Check `~/storage/shared/android_agent/last_result.json`:
+- If modified < 10 minutes ago AND `success: true` AND user's words imply continuation → **follow-up**
+- Otherwise → **fresh task**
+
+For follow-ups: read `last_result.json` and `summary` field. Build the goal starting with what's already on screen.
+
+### 3. What information do I still need?
+
+Cross-check against preferences.json first. Only ask the user for what is truly missing (app, address, specific item). Never ask about UI navigation — the agent handles that.
+
+### 4. How many runs will this take?
+
+- 1 screen: 1 run
+- 2–3 screens: 2 runs
+- Full purchase flow (search → product → cart → checkout → pay): 3–5 runs
+
+Plan the sequence mentally before starting Run #1. Do not improvise mid-task.
+
+### 5. What step count is right?
+
+See Section 5 guidelines. When in doubt, use more steps — the agent exits early on success.
+
+### Only after answering all five — start the run pattern in Section 3.
+
+---
+
 ## SECTION 3 — Run Pattern (Background Run & Auto-Notify)
 
 ALWAYS follow this exact flow. Never deviate.
@@ -166,6 +204,16 @@ bash ~/android-automation-agent/scripts/kill_monitors.sh
 
 Then tell the user: "Cancelled. Ready for your next task."
 
+### Step 0.5 — Announce via voice
+
+Before starting monitors, announce the task via TTS so the user hears it on the device:
+
+```bash
+termux-tts-speak "Starting automation. $(python3 -c "import sys; t='<SHORT GOAL SUMMARY>'; print(t[:150])")"
+```
+
+Keep the spoken summary short and natural — e.g. "Starting automation. Booking auto ride on Rapido" not the full raw goal string. Trim to ~150 chars.
+
 ### Step 1 — Kill old monitors, start fresh ones
 
 Ensure BOT_TOKEN and CHAT_ID are exported.
@@ -196,6 +244,22 @@ when it begins, and a final result notification with screenshot when it finishes
 You do not need to send any manual curl notifications.
 
 ### Step 3 — End your turn. Monitors deliver the result + screenshot.
+
+### Step 4 — After result arrives, announce completion via TTS
+
+When the result monitor delivers the final JSON, announce it:
+
+```bash
+termux-tts-speak "Task done. $(python3 -c "
+import json, os
+try:
+    d = json.load(open(os.path.expanduser('~/storage/shared/android_agent/last_result.json')))
+    s = 'Success.' if d.get('success') else 'Failed.'
+    print(s)
+except:
+    print('Check Telegram.')
+")"
+```
 
 ### Hard rules for running
 
@@ -276,8 +340,7 @@ For any task involving 3+ screens, multiple apps, or checkout/payment:
 2. **Decompose into atomic runs** — each run should do ONE thing (open app, search, add to cart, etc.)
 3. **Run step 1** → wait for result JSON → verify success
 4. **If success** → read last_result.json → construct next goal WITH context → run step 2
-5. **If failure** → report failure + screenshot to user → ask how to proceed
-6. **NEVER auto-retry checkout or payment** — always ask the user to confirm first
+5. **If failure** → retry once with a rephrased goal → if still failing, report to user and ask how to proceed
 
 ### Example decomposition — "Order milk from Blinkit"
 
@@ -302,9 +365,10 @@ Step 4: Run #3
   --steps 20 --json
   → Wait for result → Check success
 
-Step 5: STOP — send screenshot to user
-  "Cart is ready for checkout. Total is visible on screen. Should I place the order?"
-  → Only proceed if user confirms
+Step 5: Run #4
+  Goal: "Blinkit checkout screen is showing. Select payment method and place the order"
+  --steps 25 --json
+  → Wait for result → Task complete
 ```
 
 ### Step count guidelines
@@ -312,7 +376,7 @@ Step 5: STOP — send screenshot to user
 - Simple tasks (open app, single search): `--steps 15`
 - Medium tasks (search + navigate + tap): `--steps 25`
 - Complex tasks (multi-screen flows): `--steps 35`
-- Checkout flows: `--steps 25` (but always stop before final payment)
+- Checkout/payment flows: `--steps 25`
 
 ---
 
@@ -336,9 +400,9 @@ Always take a FRESH screenshot. Never use last_screenshot.png from a previous ru
 - Simple tasks: 30-120 seconds
 - Complex tasks: up to 10 minutes
 - If `success: false`, check the Telegram screenshot the monitor sent
-- Common failure: agent couldn't find an element → it may be off-screen → suggest re-running with "scroll down first, then..."
-- Never auto-retry a checkout run — always verify manually first
-- If the agent keeps failing on the same step, try rephrasing the goal to be simpler/more specific
+- Common failure: agent couldn't find an element → it may be off-screen → retry once with "scroll down first, then..."
+- If the agent fails on the same step twice, try rephrasing the goal to be simpler/more specific, or break it into a smaller run
+- For checkout/payment failures: retry once with more context in the goal string (e.g. describe what's on screen)
 - **Popup/overlay buttons not responding**: Some apps (Rapido, Uber, Swiggy) use custom
   popups that are invisible to the UI accessibility tree. The agent will switch to
   vision-based tapping automatically. If it still fails, try breaking the task into

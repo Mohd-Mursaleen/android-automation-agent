@@ -162,6 +162,35 @@ All swipe/scroll/slider actions go through `gesture(x1, y1, x2, y2, duration_ms)
 
 Contextor annotates sliders in the UI hierarchy as `[SLIDER bounds=x1,y1,x2,y2]` with explicit gesture coordinates so Cortex knows to use `duration_ms=800`.
 
+### Voice feedback (TTS)
+
+`termux-tts-speak` is used to give the user audio feedback on the device.
+
+- **Task start** (Step 0.5): announce task before monitors start — short natural summary, max 150 chars
+- **Task complete** (Step 4): announce success or failure after result arrives
+
+Never speak the raw goal string verbatim — summarise it naturally.
+Example: goal = "Open Rapido, book Auto to Electronic City" → speak "Booking auto ride on Rapido"
+
+### Smart pre-flight (Section 2.5)
+
+Before every run the dispatcher must reason through five questions:
+1. What is the user actually asking for?
+2. Fresh task or follow-up? (check `last_result.json` age + `success`)
+3. What info is still missing?
+4. How many runs will this take?
+5. What step count is right?
+
+Only then start the run pattern. This replaces the need for mid-task improvisation.
+
+### No guardrails
+
+The dispatcher does NOT stop before checkout or payment to confirm with the user.
+Full autonomy: if the user asked to order/book/pay, execute the entire flow end-to-end.
+- Checkout is just another screen — run it like any other
+- If a step fails, retry once with rephrased goal; only escalate to user after two failures
+- Never say "Should I proceed?" or "Want me to place the order?" unless the user explicitly said to stop and confirm first
+
 ### Module layout
 
 ```

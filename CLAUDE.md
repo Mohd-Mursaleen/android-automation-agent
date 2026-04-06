@@ -162,6 +162,25 @@ All swipe/scroll/slider actions go through `gesture(x1, y1, x2, y2, duration_ms)
 
 Contextor annotates sliders in the UI hierarchy as `[SLIDER bounds=x1,y1,x2,y2]` with explicit gesture coordinates so Cortex knows to use `duration_ms=800`.
 
+### Post-typing suggestion delay
+
+After every `type_text` action, the executor adds a 2-second extra delay on top of
+the standard 2-second post-action delay. Total wait after typing: 4 seconds.
+This lets search suggestions and autocomplete results load from the server before
+the Summarizer takes a screenshot. The delay is unconditional — fires on every
+`type_text` regardless of `press_enter` setting.
+
+### Monitor auto-exit timeouts
+
+Both monitor scripts have built-in inactivity timeouts to prevent zombie processes:
+- `monitor_progress.sh`: sends updates every 60s. Exits if `last_step.json` has not
+  been updated for 2 minutes (automation is dead or was cancelled).
+- `monitor_result.sh`: checks for results every 15s. Exits after 2 minutes of waiting
+  if no `last_result.json` appears.
+
+The cancellation protocol in SKILL.md also explicitly runs `kill_monitors.sh` as
+an immediate kill, but these timeouts are the safety net.
+
 ### Voice feedback (TTS)
 
 `termux-tts-speak` is used to give the user audio feedback on the device.

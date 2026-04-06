@@ -28,6 +28,9 @@ fi
 echo $$ > "$PID_FILE"
 echo "[$(date)] Result monitor started (PID: $$)" >> "$LOG_FILE"
 
+WAIT_COUNT=0
+MAX_WAITS=8  # 8 * 15s = 2 minutes max wait
+
 while true; do
     if [ -f "$RESULT_FILE" ]; then
         MTIME=$(stat -c %Y "$RESULT_FILE" 2>/dev/null || echo 0)
@@ -59,6 +62,11 @@ except:
         fi
     fi
     sleep 15
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    if [ "$WAIT_COUNT" -ge "$MAX_WAITS" ]; then
+        echo "[$(date)] Result monitor timed out after 2 minutes. Exiting." >> "$LOG_FILE"
+        break
+    fi
 done
 
 # Cleanup

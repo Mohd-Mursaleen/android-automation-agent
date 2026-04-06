@@ -5,8 +5,8 @@ if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
 
-# Live progress monitor — sends screenshot + action log every 45s
-# Depends on BOT_TOKEN and CHAT_ID being exported
+# Live progress monitor — sends screenshot + action log every 60s
+# Auto-exits if no step updates for 2 minutes (automation dead/cancelled)
 
 STEP_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_step.json"
 RESULT_FILE="/data/data/com.termux/files/home/storage/shared/android_agent/last_result.json"
@@ -28,10 +28,12 @@ fi
 echo $$ > "$PID_FILE"
 echo "[$(date)] Progress monitor started (PID: $$)" >> "$LOG_FILE"
 
-while true; do
-    sleep 45
+LAST_ACTIVITY=$(date +%s)
 
-    # Exit if result file is fresh (task ended)
+while true; do
+    sleep 60
+
+    # Exit if result file is fresh (task ended normally)
     if [ -f "$RESULT_FILE" ]; then
         MTIME=$(stat -c %Y "$RESULT_FILE" 2>/dev/null || echo 0)
         NOW=$(date +%s)
@@ -41,9 +43,28 @@ while true; do
         fi
     fi
 
-    # Only send update if step file exists
+    # Exit if no step updates for 2 minutes (automation died/cancelled)
+    NOW=$(date +%s)
     if [ -f "$STEP_FILE" ]; then
-        CAPTION=$(python3 -c "
+        STEP_MTIME=$(stat -c %Y "$STEP_FILE" 2>/dev/null || echo 0)
+        if [ $((NOW - STEP_MTIME)) -gt 120 ]; then
+            echo "[$(date)] No step updates for 2 minutes — automation appears dead. Exiting." >> "$LOG_FILE"
+            break
+        fi
+        LAST_ACTIVITY=$NOW
+    else
+        if [ $((NOW - LAST_ACTIVITY)) -gt 120 ]; then
+            echo "[$(date)] No activity for 2 minutes — exiting." >> "$LOG_FILE"
+            break
+        fi
+    fi
+
+    # Only send update if step file was updated recently (within last 90s)
+    if [ -f "$STEP_FILE" ]; then
+        STEP_MTIME=$(stat -c %Y "$STEP_FILE" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        if [ $((NOW - STEP_MTIME)) -lt 90 ]; then
+            CAPTION=$(python3 -c "
 import json
 try:
     d = json.load(open('$STEP_FILE'))
@@ -54,27 +75,28 @@ try:
     if len(action) > 200:
         action = action[:200] + '...'
     print(f'⏳ Step {step} | {elapsed}s elapsed\n\nLast action: {action}\n\nGoal: {goal}')
-except Exception as e:
-    print(f'⏳ Progress update (could not read step data)')
+except:
+    print('⏳ Progress update')
 " 2>/dev/null)
 
-        # Take a fresh screenshot
-        adb exec-out screencap -p > "$PROGRESS_SCREENSHOT" 2>/dev/null
+            # Take fresh screenshot
+            adb exec-out screencap -p > "$PROGRESS_SCREENSHOT" 2>/dev/null
 
-        if [ -f "$PROGRESS_SCREENSHOT" ] && [ -s "$PROGRESS_SCREENSHOT" ]; then
-            echo "[$(date)] Sending progress screenshot: $CAPTION" >> "$LOG_FILE"
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto" \
-                -F "chat_id=${CHAT_ID}" \
-                -F "photo=@${PROGRESS_SCREENSHOT}" \
-                -F "caption=${CAPTION}"
-        else
-            echo "[$(date)] Screenshot failed, sending text only" >> "$LOG_FILE"
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-                -d "chat_id=${CHAT_ID}" \
-                --data-urlencode "text=${CAPTION}"
+            if [ -f "$PROGRESS_SCREENSHOT" ] && [ -s "$PROGRESS_SCREENSHOT" ]; then
+                echo "[$(date)] Sending progress screenshot" >> "$LOG_FILE"
+                curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto" \
+                    -F "chat_id=${CHAT_ID}" \
+                    -F "photo=@${PROGRESS_SCREENSHOT}" \
+                    -F "caption=${CAPTION}"
+            else
+                echo "[$(date)] Screenshot failed, sending text only" >> "$LOG_FILE"
+                curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                    -d "chat_id=${CHAT_ID}" \
+                    --data-urlencode "text=${CAPTION}"
+            fi
+
+            rm -f "$PROGRESS_SCREENSHOT"
         fi
-
-        rm -f "$PROGRESS_SCREENSHOT"
     fi
 done
 

@@ -103,6 +103,23 @@ coordinates (within ±30px) more than 2 times:
 - Empty field → just type_text
 - Only use press_enter=true when submitting search or sending messages
 
+== SEARCH & SUGGESTION HANDLING ==
+
+After typing in a search bar, address field, or any field that shows autocomplete suggestions:
+1. The system automatically waits 4 seconds after typing for suggestions to load.
+2. When you get your next screenshot, the suggestions WILL be loaded. Read them carefully.
+3. Evaluate ALL visible suggestions and tap the one that BEST matches the intent.
+4. Do NOT blindly tap the first suggestion. Compare each option to what was typed.
+5. If no suggestion matches well, try clearing the field and retyping with different
+   spelling or a shorter query.
+
+Example — user wants "Global Calcium Koramangala":
+  After typing, you might see suggestions like:
+    - "Global Calcium Products Pvt Ltd, Koramangala" ← best match, tap this
+    - "Calcium Supplements Store, MG Road" ← wrong, ignore
+    - "Global Hospital, Koramangala" ← partial match but wrong place, ignore
+  Always pick the closest match to the original search text.
+
 Return ONLY this JSON, no markdown, no explanation:
 {
   "tool": "tap",

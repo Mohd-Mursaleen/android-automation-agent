@@ -80,6 +80,10 @@ class ExecutorNode:
             press_enter = args.get("press_enter", False)
             self.executor.type_text(text, reason, press_enter=press_enter)
             state.action_history.append(f"TYPE {text!r} (enter={press_enter})")
+            # Extra delay after typing — lets search suggestions / autocomplete load
+            # from server before the Summarizer takes a screenshot.
+            # Combined with _POST_ACTION_DELAY (2s), total wait after typing = 4s.
+            time.sleep(2.0)
 
         elif tool == "clear_field":
             self.executor.clear_focused_field(reason)

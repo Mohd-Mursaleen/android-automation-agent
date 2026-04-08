@@ -23,15 +23,14 @@ from android_agent.graph.nodes.orchestrator import orchestrator_node
 from android_agent.graph.nodes.planner import planner_node
 from android_agent.graph.nodes.summarizer import summarizer_node
 from android_agent.graph.state import AgentState
+from android_agent.utils.telegram import notify_telegram as _notify_telegram
 
 logger = logging.getLogger(__name__)
 
 _LOCK_PATH = os.path.expanduser("~/storage/shared/android_agent/agent.lock")
 
-# Send a Telegram progress screenshot every this many steps (0 = disabled)
+# Send a Telegram progress screenshot every this many steps
 _PROGRESS_EVERY = 2
-
-from android_agent.utils.telegram import notify_telegram as _notify_telegram  # noqa: E402
 
 
 def _build_run_summary(state: AgentState, run_start: float) -> str:
@@ -278,7 +277,7 @@ def run_task(
 
             # Integrated progress notification — fires every _PROGRESS_EVERY steps.
             # Uses state.latest_screenshot_b64 which summarizer just refreshed.
-            if _PROGRESS_EVERY > 0 and state.step_count % _PROGRESS_EVERY == 0:
+            if state.step_count % _PROGRESS_EVERY == 0:
                 _current_sg = next(
                     (sg for sg in state.subgoal_plan if sg.status == "running"), None
                 )
@@ -320,9 +319,8 @@ def run_task(
 
         # TTS completion announcement — Termux-specific, safe to fail silently
         try:
-            _tts = "Task complete." if state.task_complete else "Task failed."
             subprocess.run(
-                ["termux-tts-speak", _tts],
+                ["termux-tts-speak", "Task complete." if state.task_complete else "Task failed."],
                 timeout=5, check=False,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )

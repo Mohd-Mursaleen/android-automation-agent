@@ -57,6 +57,6 @@ def notify_telegram(text: str, photo_b64: str = None) -> None:
                 data=data,
                 method="POST",
             )
-        urllib.request.urlopen(req, timeout=15)
+        urllib.request.urlopen(req, timeout=5)
     except Exception:
         pass

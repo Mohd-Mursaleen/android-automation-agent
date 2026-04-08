@@ -166,7 +166,7 @@ See Section 5 guidelines. When in doubt, use more steps — the agent exits earl
 
 ## SECTION 3 — Run Pattern
 
-ALWAYS follow this exact flow. Never deviate.
+ALWAYS follow this exact flow. NEVER fire-and-forget. NEVER background the command.
 
 ### Step 0 — Check if the agent is busy
 
@@ -177,13 +177,12 @@ bash ~/android-automation-agent/scripts/check_busy.sh
 ```
 
 - If output is `FREE` → proceed to Step 1.
-- If output starts with `BUSY:` → tell the user:
-  "I'm currently running: [task details from output]. Wait for it to finish, or tell me to cancel it so I can start your new task."
-- Do NOT proceed if busy. Do NOT start a new run.
+- If output starts with `BUSY:` → tell the user what's running and ask them to wait or cancel.
+- Do NOT proceed if busy.
 
 ### Cancelling a running task
 
-If the user says "cancel it", "stop", or "kill the current task":
+If the user says "cancel", "stop", or "kill the current task":
 
 ```bash
 LOCK_FILE="$HOME/storage/shared/android_agent/agent.lock"
@@ -199,28 +198,41 @@ fi
 
 Then tell the user: "Cancelled. Ready for your next task."
 
-### Step 1 — Run the agent
-
-Tell user: "Task started. Goal: '<goal string used>'. You'll get Telegram updates every 2 steps."
+### Step 1 — Run the agent (BLOCKING — you must wait for it)
 
 ```bash
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
 ```
 
-The agent handles everything automatically — no monitor scripts needed:
-- Announces task start via TTS before the first ADB action
-- Sends "🤖 Android Agent started" to Telegram
-- Sends a screenshot + caption to Telegram every 2 steps throughout the run
-- Sends a final result notification with screenshot when done (even on crash)
-- Announces task completion via TTS
+**This is a blocking command. It runs for 30 seconds to several minutes. You MUST wait for it to return. Do NOT background it. Do NOT end your turn early.**
 
-### Step 2 — End your turn. Telegram delivers updates and the final result.
+While it runs:
+- The user receives Telegram progress screenshots every 2 steps automatically.
+- You do not need to do anything. Just wait.
 
-### Hard rules for running
+When it finishes, stdout contains one JSON object like:
+```json
+{"success": true, "goal": "...", "steps": 14, "summary": "Completed: Open Rapido; Select Auto ride."}
+```
+or on failure:
+```json
+{"success": false, "goal": "...", "steps": 25, "error": "max_steps_reached", "summary": "Did not complete: Book ride."}
+```
 
-- Never use sessions_yield — models ignore it.
-- Never use background=true + notifyOnExit — heartbeats fire into dead sessions.
-- Never promise "I'll notify you" unless Step 1 is already running.
+### Step 2 — Read the JSON and reply to the user
+
+Parse the stdout JSON:
+- `success: true` → tell the user what was accomplished using the `summary` field.
+- `success: false` → tell the user what failed, what you'll try next; apply Section 7.
+
+**NEVER say "check Telegram for results" — you have the result in the JSON.**
+**NEVER say "I'm monitoring in the background" — you waited, you have the answer now.**
+
+### Hard rules
+
+- BLOCKING only — never background this command.
+- Never use sessions_yield or background=true + notifyOnExit.
+- Never end your turn between Step 1 and Step 2.
 
 ---
 
@@ -346,18 +358,15 @@ Takes a fresh ADB screenshot and sends it to Telegram automatically. Never use `
 
 ---
 
-## SECTION 7 — Timing & Troubleshooting
+## SECTION 7 — Failure Recovery
 
-- Simple tasks: 30-120 seconds
-- Complex tasks: up to 10 minutes
-- If `success: false`, check the Telegram screenshots from the run (sent every 2 steps)
-- Common failure: agent couldn't find an element → it may be off-screen → retry once with "scroll down first, then..."
-- If the agent fails on the same step twice, try rephrasing the goal to be simpler/more specific, or break it into a smaller run
-- For checkout/payment failures: retry once with more context in the goal string (e.g. describe what's on screen)
-- **Popup/overlay buttons not responding**: Some apps (Rapido, Uber, Swiggy) use custom
-  popups that are invisible to the UI accessibility tree. The agent will switch to
-  vision-based tapping automatically. If it still fails, try breaking the task into
-  smaller steps — e.g. separate "select Auto" and "tap Book" into two runs.
-- **Agent stuck tapping same spot**: The system detects tap loops and auto-fails after
-  4 identical taps. If this happens, the target element may need a different interaction
-  (long_press, gesture, or scroll to reveal it in a different position).
+When `run.py --json` returns `"success": false`, read the `summary` field to understand what failed, then act:
+
+| Failure pattern | Recovery action |
+|---|---|
+| Element not found / off-screen | Retry with "scroll down first, then [original goal]" |
+| Same step failed twice | Rephrase goal more specifically, or split into a smaller run |
+| Checkout / payment failed | Retry with current screen state described at the start of the goal |
+| Popup or overlay not tapping | Break into two runs: one to reach the popup, one to tap the button |
+| Tap loop (summary says "loop detected") | Retry with a different approach — "scroll to reveal", "swipe up first" |
+| `max_steps_reached` | The task was too complex for one run — decompose and retry from where it stopped |

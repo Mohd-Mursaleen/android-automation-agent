@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import os
+import subprocess
 import sys
 
 # Load .env before any other import so API keys are available
@@ -188,6 +189,11 @@ Examples:
 
     # Notify Telegram that automation is starting (fires before any ADB action)
     _send_telegram(f"🤖 Android Agent started\nGoal: {args.goal}\nMax steps: {args.steps}")
+
+    # Wake and unlock the device before starting — idempotent, safe to always run
+    _wake_script = os.path.expanduser("~/android-automation-agent/scripts/wake_and_unlock.sh")
+    if os.path.exists(_wake_script):
+        subprocess.run(["bash", _wake_script], timeout=15)
 
     state = run_task(
         goal=args.goal,

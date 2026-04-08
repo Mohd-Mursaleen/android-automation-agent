@@ -1,6 +1,7 @@
 # 🦾 Iota Onboarding: Android Automation Agent
 
 ### 🚩 To the New Agent
+
 You are being tasked with setting up the **Iota Android Automation Agent**. This is a vision-based automation tool that uses ADB and LLM analysis to perform complex UI tasks on a connected Android device, with live Telegram notifications sent back to the user.
 
 Complete every phase in order. Do not skip phases.
@@ -16,7 +17,7 @@ Clone the repository and run the setup script. The script handles Python depende
 git clone https://github.com/Mohd-Mursaleen/android-automation-agent.git ~/android-automation-agent
 
 # 2. Run the turnkey setup utility
-cd ~/android-automation-agent && bash setup.sh
+cd ~/android-automation-agent && pkg install libjpeg-turbo libpng zlib libtiff libwebp openjpeg -y && pip install -r requirements.txt
 ```
 
 ---
@@ -145,17 +146,20 @@ cd ~/android-automation-agent && python run.py "Open Settings" --steps 10 --json
 ```
 
 **Expected outcomes:**
+
 - The Android device screen wakes up
 - Settings app opens on the device
 - A result JSON appears in `~/storage/shared/android_agent/last_result.json`
 - A Telegram message with a screenshot arrives in your chat
 
 **If the Telegram message doesn't arrive:**
+
 - Confirm the values are correct: `echo "BOT_TOKEN=${BOT_TOKEN}" && echo "CHAT_ID=${CHAT_ID}"`
 - Test the bot directly: `curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d "chat_id=${CHAT_ID}" -d "text=test"`
 - If the curl returns `{"ok":false,...}`, the token or chat ID is wrong — go back to Phase 2 and ask the user to re-confirm the values
 
 **If ADB device not found:**
+
 - Confirm USB debugging is enabled on the device
 - Run `adb devices` — the device should appear as `authorized`
 - If it shows `unauthorized`, unlock the phone and tap "Allow" on the USB debugging prompt

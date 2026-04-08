@@ -166,19 +166,14 @@ See Section 5 guidelines. When in doubt, use more steps — the agent exits earl
 
 ## SECTION 3 — Run Pattern
 
-ALWAYS follow this exact flow. NEVER fire-and-forget. NEVER background the command.
-
 ### Step 0 — Check if the agent is busy
-
-Before ANYTHING else, check if a task is already running:
 
 ```bash
 bash ~/android-automation-agent/scripts/check_busy.sh
 ```
 
-- If output is `FREE` → proceed to Step 1.
-- If output starts with `BUSY:` → tell the user what's running and ask them to wait or cancel.
-- Do NOT proceed if busy.
+- `FREE` → proceed to Step 1.
+- `BUSY: ...` → tell the user what's running and ask them to wait or cancel.
 
 ### Cancelling a running task
 
@@ -188,51 +183,59 @@ If the user says "cancel", "stop", or "kill the current task":
 LOCK_FILE="$HOME/storage/shared/android_agent/agent.lock"
 if [ -f "$LOCK_FILE" ]; then
     PID=$(python3 -c "import json; print(json.load(open('$LOCK_FILE')).get('pid',''))" 2>/dev/null)
-    if [ -n "$PID" ]; then
-        kill "$PID" 2>/dev/null
-        sleep 2
-    fi
+    if [ -n "$PID" ]; then kill "$PID" 2>/dev/null; sleep 2; fi
     rm -f "$LOCK_FILE"
 fi
 ```
 
 Then tell the user: "Cancelled. Ready for your next task."
 
-### Step 1 — Run the agent (BLOCKING — you must wait for it)
+### Step 1 — Start the automation (non-blocking)
 
-```bash
-cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
+```
+exec { "command": "cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json", "yieldMs": 5000 }
 ```
 
-**This is a blocking command. It runs for 30 seconds to several minutes. You MUST wait for it to return. Do NOT background it. Do NOT end your turn early.**
+Two outcomes:
+- **Returns JSON** (command finished in <5s) → go to Step 2A. Rare.
+- **Returns session ID** (normal case) → go to Step 2B. The automation is now running in background.
 
-While it runs:
-- The user receives Telegram progress screenshots every 2 steps automatically.
-- You do not need to do anything. Just wait.
+### Step 2A — JSON returned inline
 
-When it finishes, stdout contains one JSON object like:
-```json
-{"success": true, "goal": "...", "steps": 14, "summary": "Completed: Open Rapido; Select Auto ride."}
-```
-or on failure:
-```json
-{"success": false, "goal": "...", "steps": 25, "error": "max_steps_reached", "summary": "Did not complete: Book ride."}
-```
-
-### Step 2 — Read the JSON and reply to the user
-
-Parse the stdout JSON:
+Parse it and reply:
 - `success: true` → tell the user what was accomplished using the `summary` field.
-- `success: false` → tell the user what failed, what you'll try next; apply Section 7.
+- `success: false` → tell the user what failed; apply Section 7.
 
-**NEVER say "check Telegram for results" — you have the result in the JSON.**
-**NEVER say "I'm monitoring in the background" — you waited, you have the answer now.**
+### Step 2B — Session ID returned (normal case)
+
+Tell the user:
+> "Automation started. You'll get live screenshots on Telegram every 2 steps. When you see the final result there, come back and I'll continue."
+
+You are now **free to respond normally.** The automation runs in background. Telegram handles all updates.
+
+### Step 3 — When user comes back ("done?", "book it", "what happened?", "next step")
+
+First check if still running:
+
+```
+exec { "command": "bash ~/android-automation-agent/scripts/check_busy.sh" }
+```
+
+- `BUSY: ...` → "Still running, watch Telegram."
+- `FREE` → Read the result:
+
+```
+exec { "command": "cat ~/storage/shared/android_agent/last_result.json" }
+```
+
+Parse the JSON (`success`, `summary`). Report to user. Continue to next step if needed.
 
 ### Hard rules
 
-- BLOCKING only — never background this command.
-- Never use sessions_yield or background=true + notifyOnExit.
-- Never end your turn between Step 1 and Step 2.
+- **NEVER use `process/log`** — it causes your turn to timeout. Do not use it for anything.
+- **NEVER use `process/poll`** — it returns nothing useful for this pattern.
+- **NEVER loop checking the session** — the only check is `check_busy.sh`, once, when user asks.
+- `last_result.json` is written when automation finishes. Read it then. Not before.
 
 ---
 

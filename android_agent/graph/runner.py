@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import time
 
 from android_agent.executor.android import AndroidExecutor
@@ -26,6 +27,41 @@ from android_agent.graph.state import AgentState
 logger = logging.getLogger(__name__)
 
 _LOCK_PATH = os.path.expanduser("~/storage/shared/android_agent/agent.lock")
+
+# Send a Telegram progress screenshot every this many steps (0 = disabled)
+_PROGRESS_EVERY = 2
+
+from android_agent.utils.telegram import notify_telegram as _notify_telegram  # noqa: E402
+
+
+def _build_run_summary(state: AgentState, run_start: float) -> str:
+    """
+    Build a short summary string for the final Telegram notification.
+
+    Args:
+        state: Completed agent state.
+        run_start: Unix timestamp from time.time() when the run started.
+
+    Returns:
+        Formatted multi-line summary.
+    """
+    elapsed = int(time.time() - run_start)
+    emoji = "✅" if state.task_complete else "❌"
+    status = "Task complete" if state.task_complete else "Task failed"
+
+    parts = [f"{emoji} {status} — {state.step_count} steps, {elapsed}s"]
+    parts.append(f"Goal: {state.initial_goal}")
+
+    complete = [sg.description for sg in state.subgoal_plan if sg.status == "complete"]
+    failed_sgs = [sg.description for sg in state.subgoal_plan if sg.status == "failed"]
+    if complete:
+        parts.append("Done: " + "; ".join(complete))
+    if failed_sgs:
+        parts.append("Failed: " + "; ".join(failed_sgs))
+    if not state.task_complete and state.failure_reason:
+        parts.append(f"Reason: {state.failure_reason[:200]}")
+
+    return "\n".join(parts)
 
 
 def _acquire_lock(goal: str) -> bool:
@@ -240,6 +276,20 @@ def run_task(
 
             state = summarizer_node(state, android_executor)
 
+            # Integrated progress notification — fires every _PROGRESS_EVERY steps.
+            # Uses state.latest_screenshot_b64 which summarizer just refreshed.
+            if _PROGRESS_EVERY > 0 and state.step_count % _PROGRESS_EVERY == 0:
+                _current_sg = next(
+                    (sg for sg in state.subgoal_plan if sg.status == "running"), None
+                )
+                _last_action = state.action_history[-1] if state.action_history else ""
+                _caption = (
+                    f"⏳ Step {state.step_count} | {int(time.time() - _run_start)}s elapsed\n"
+                    f"Subgoal: {_current_sg.description if _current_sg else 'wrapping up'}\n"
+                    f"Action: {_last_action[:120]}"
+                )
+                _notify_telegram(_caption, state.latest_screenshot_b64)
+
             # Check again after summarizer (it may have marked a subgoal failed)
             route = convergence_node(state)
             if route == "end":
@@ -257,6 +307,28 @@ def run_task(
                 print(f"\nTask failed: {state.failure_reason}")
 
     finally:
+        # Final Telegram notification — guaranteed even if the run raised an exception.
+        # Takes a fresh screenshot; falls back to last known screenshot on ADB failure.
+        try:
+            _final_screen = android_executor.screenshot("final", as_base64=True)
+            _notify_telegram(
+                _build_run_summary(state, _run_start),
+                _final_screen or state.latest_screenshot_b64,
+            )
+        except Exception:
+            pass
+
+        # TTS completion announcement — Termux-specific, safe to fail silently
+        try:
+            _tts = "Task complete." if state.task_complete else "Task failed."
+            subprocess.run(
+                ["termux-tts-speak", _tts],
+                timeout=5, check=False,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
         _release_lock()
 
     return state

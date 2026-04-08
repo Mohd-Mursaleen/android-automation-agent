@@ -81,6 +81,10 @@ def summarizer_node(state: AgentState, executor: AndroidExecutor) -> AgentState:
         logger.warning("Summarizer: screenshot failed — skipping verification")
         return state
 
+    # Keep state current — the post-action screenshot replaces the pre-action one
+    # so the runner always has the most recent screen for notifications and next cycle
+    state.latest_screenshot_b64 = screenshot_b64
+
     result = _verify(last_action, screenshot_b64)
     success = result.get("success", True)  # default optimistic on parse failure
     observation = result.get("observation", "")

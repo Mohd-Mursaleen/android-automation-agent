@@ -30,36 +30,23 @@ _RESULT_PATH = os.path.join(_ARTIFACT_DIR, "last_result.json")
 _SCREENSHOT_PATH = os.path.join(_ARTIFACT_DIR, "last_screenshot.png")
 
 
-def _send_telegram(text: str, photo_path: str = None) -> None:
-    """
-    Best-effort Telegram notification. Requires BOT_TOKEN and CHAT_ID env vars.
-    Never raises — silently fails if env vars are missing or network is down.
+from android_agent.utils.telegram import notify_telegram as _tg
 
-    Args:
-        text: Message text or photo caption (truncated to 1024 chars for captions).
-        photo_path: Optional path to a PNG/JPG to send as a photo. If None, sends text only.
+
+def _take_screenshot_b64() -> str:
     """
-    import requests as _req
-    bot_token = os.environ.get("BOT_TOKEN", "")
-    chat_id = os.environ.get("CHAT_ID", "")
-    if not bot_token or not chat_id:
-        return
+    Capture current screen via ADB and return as base64 PNG. Returns '' on failure.
+    """
     try:
-        if photo_path and os.path.exists(photo_path):
-            _req.post(
-                f"https://api.telegram.org/bot{bot_token}/sendPhoto",
-                data={"chat_id": chat_id, "caption": text[:1024]},
-                files={"photo": open(photo_path, "rb")},
-                timeout=15,
-            )
-        else:
-            _req.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                data={"chat_id": chat_id, "text": text},
-                timeout=10,
-            )
+        result = subprocess.run(
+            ["adb", "exec-out", "screencap", "-p"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout:
+            return base64.b64encode(result.stdout).decode()
     except Exception:
         pass
+    return ""
 
 
 def _build_summary(state) -> str:
@@ -168,6 +155,11 @@ Examples:
         action="store_true",
         help="Verify ADB connection and OpenRouter API key, then exit",
     )
+    parser.add_argument(
+        "--screenshot",
+        action="store_true",
+        help="Take a screenshot of the current screen, send to Telegram, then exit",
+    )
 
     args = parser.parse_args()
 
@@ -176,6 +168,16 @@ Examples:
 
         ok = run_check()
         sys.exit(0 if ok else 1)
+
+    if args.screenshot:
+        screen_b64 = _take_screenshot_b64()
+        if screen_b64:
+            _tg("📱 Current screen", screen_b64)
+            print("Screenshot sent to Telegram.")
+        else:
+            print("ADB screenshot failed.", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
 
     if not args.goal:
         parser.print_help()
@@ -187,13 +189,31 @@ Examples:
 
     from android_agent.graph.runner import run_task
 
+    # TTS start announcement — best effort, Termux-specific
+    try:
+        subprocess.run(
+            ["termux-tts-speak", f"Starting. {args.goal[:100]}"],
+            timeout=5, check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
     # Notify Telegram that automation is starting (fires before any ADB action)
-    _send_telegram(f"🤖 Android Agent started\nGoal: {args.goal}\nMax steps: {args.steps}")
+    _tg(f"🤖 Android Agent started\nGoal: {args.goal}\nMax steps: {args.steps}")
 
     # Wake and unlock the device before starting — idempotent, safe to always run
     _wake_script = os.path.expanduser("~/android-automation-agent/scripts/wake_and_unlock.sh")
     if os.path.exists(_wake_script):
         subprocess.run(["bash", _wake_script], timeout=15)
+
+    # First screenshot — confirms screen is awake and shows starting state
+    _initial_screen = _take_screenshot_b64()
+    if _initial_screen:
+        _tg(
+            f"📱 Screen ready | Goal: {args.goal[:200]}",
+            _initial_screen,
+        )
 
     state = run_task(
         goal=args.goal,
@@ -226,16 +246,6 @@ Examples:
 
     # Write artifacts after every run — always, not just in JSON mode
     _write_artifacts(state, result)
-
-    # Send final result to Telegram with screenshot
-    status_emoji = "✅" if state.task_complete else "❌"
-    final_text = (
-        f"{status_emoji} Automation finished\n"
-        f"Goal: {args.goal}\n"
-        f"Steps: {state.step_count}\n"
-        f"{result.get('summary', '')}"
-    )
-    _send_telegram(final_text, _SCREENSHOT_PATH if state.latest_screenshot_b64 else None)
 
     if args.json_mode:
         print(json.dumps(result))

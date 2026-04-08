@@ -131,9 +131,9 @@ Adapt the above pattern for whatever preference you're saving.
 
 ---
 
-## SECTION 2.5 — Smart Pre-flight: Think Before You Act
+## SECTION 2.5 — Pre-flight Checklist
 
-Before constructing the goal string or starting any run, reason through the task:
+Before constructing the goal string or starting any run, reason through:
 
 ### 1. What is the user actually asking for?
 
@@ -146,29 +146,25 @@ Check `~/storage/shared/android_agent/last_result.json`:
 - If modified < 10 minutes ago AND `success: true` AND user's words imply continuation → **follow-up**
 - Otherwise → **fresh task**
 
-For follow-ups: read `last_result.json` and `summary` field. Build the goal starting with what's already on screen.
+For follow-ups: read `last_result.json` and `summary` field. Build the goal starting with what's already on screen. See Section 4 for full detection rules and goal construction.
 
-### 3. What information do I still need?
-
-Cross-check against preferences.json first. Only ask the user for what is truly missing (app, address, specific item). Never ask about UI navigation — the agent handles that.
-
-### 4. How many runs will this take?
+### 3. How many runs will this take?
 
 - 1 screen: 1 run
 - 2–3 screens: 2 runs
 - Full purchase flow (search → product → cart → checkout → pay): 3–5 runs
 
-Plan the sequence mentally before starting Run #1. Do not improvise mid-task.
+Plan the sequence before starting Run #1. Do not improvise mid-task.
 
-### 5. What step count is right?
+### 4. What step count is right?
 
 See Section 5 guidelines. When in doubt, use more steps — the agent exits early on success.
 
-### Only after answering all five — start the run pattern in Section 3.
+### Only after answering all four — start the run pattern in Section 3.
 
 ---
 
-## SECTION 3 — Run Pattern (Background Run & Auto-Notify)
+## SECTION 3 — Run Pattern
 
 ALWAYS follow this exact flow. Never deviate.
 
@@ -183,7 +179,7 @@ bash ~/android-automation-agent/scripts/check_busy.sh
 - If output is `FREE` → proceed to Step 1.
 - If output starts with `BUSY:` → tell the user:
   "I'm currently running: [task details from output]. Wait for it to finish, or tell me to cancel it so I can start your new task."
-- Do NOT proceed to Step 1 if busy. Do NOT kill monitors or start a new run.
+- Do NOT proceed if busy. Do NOT start a new run.
 
 ### Cancelling a running task
 
@@ -199,74 +195,32 @@ if [ -f "$LOCK_FILE" ]; then
     fi
     rm -f "$LOCK_FILE"
 fi
-bash ~/android-automation-agent/scripts/kill_monitors.sh
 ```
 
 Then tell the user: "Cancelled. Ready for your next task."
 
-### Step 0.5 — Announce via voice
+### Step 1 — Run the agent
 
-Before starting monitors, announce the task via TTS so the user hears it on the device:
-
-```bash
-termux-tts-speak "Starting automation. $(python3 -c "import sys; t='<SHORT GOAL SUMMARY>'; print(t[:150])")"
-```
-
-Keep the spoken summary short and natural — e.g. "Starting automation. Booking auto ride on Rapido" not the full raw goal string. Trim to ~150 chars.
-
-### Step 1 — Kill old monitors, start fresh ones
-
-Ensure BOT_TOKEN and CHAT_ID are exported.
+Tell user: "Task started. Goal: '<goal string used>'. You'll get Telegram updates every 2 steps."
 
 ```bash
-bash ~/android-automation-agent/scripts/kill_monitors.sh
-```
-
-```
-exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_result.sh'
-```
-
-```
-exec yieldMs=500 command='bash ~/android-automation-agent/scripts/monitor_progress.sh'
-```
-
-### Step 2 — Wake the device, then run the agent
-
-Tell user: "Task started. Goal: '<goal string used>'. You'll get screenshot updates every 45s."
-
-```bash
-bash ~/android-automation-agent/scripts/wake_and_unlock.sh && \
 cd ~/android-automation-agent && python run.py '<GOAL>' --steps <N> --json
 ```
 
-The agent sends a "🤖 Android Agent started" notification to Telegram automatically
-when it begins, and a final result notification with screenshot when it finishes.
-You do not need to send any manual curl notifications.
+The agent handles everything automatically — no monitor scripts needed:
+- Announces task start via TTS before the first ADB action
+- Sends "🤖 Android Agent started" to Telegram
+- Sends a screenshot + caption to Telegram every 2 steps throughout the run
+- Sends a final result notification with screenshot when done (even on crash)
+- Announces task completion via TTS
 
-### Step 3 — End your turn. Monitors deliver the result + screenshot.
-
-### Step 4 — After result arrives, announce completion via TTS
-
-When the result monitor delivers the final JSON, announce it:
-
-```bash
-termux-tts-speak "Task done. $(python3 -c "
-import json, os
-try:
-    d = json.load(open(os.path.expanduser('~/storage/shared/android_agent/last_result.json')))
-    s = 'Success.' if d.get('success') else 'Failed.'
-    print(s)
-except:
-    print('Check Telegram.')
-")"
-```
+### Step 2 — End your turn. Telegram delivers updates and the final result.
 
 ### Hard rules for running
 
 - Never use sessions_yield — models ignore it.
 - Never use background=true + notifyOnExit — heartbeats fire into dead sessions.
-- Never promise "I'll notify you" without monitors already running.
-- Always run wake_and_unlock.sh before the agent.
+- Never promise "I'll notify you" unless Step 1 is already running.
 
 ---
 
@@ -385,13 +339,10 @@ Step 5: Run #4
 When user asks "what's on screen?", "what's happening?", or "show me the phone":
 
 ```bash
-adb exec-out screencap -p > /tmp/screen.png
-curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
-  -F "chat_id=${CHAT_ID}" \
-  -F "document=@/tmp/screen.png"
+cd ~/android-automation-agent && python run.py --screenshot
 ```
 
-Always take a FRESH screenshot. Never use last_screenshot.png from a previous run.
+Takes a fresh ADB screenshot and sends it to Telegram automatically. Never use `last_screenshot.png` — it's from a previous run.
 
 ---
 
@@ -399,7 +350,7 @@ Always take a FRESH screenshot. Never use last_screenshot.png from a previous ru
 
 - Simple tasks: 30-120 seconds
 - Complex tasks: up to 10 minutes
-- If `success: false`, check the Telegram screenshot the monitor sent
+- If `success: false`, check the Telegram screenshots from the run (sent every 2 steps)
 - Common failure: agent couldn't find an element → it may be off-screen → retry once with "scroll down first, then..."
 - If the agent fails on the same step twice, try rephrasing the goal to be simpler/more specific, or break it into a smaller run
 - For checkout/payment failures: retry once with more context in the goal string (e.g. describe what's on screen)

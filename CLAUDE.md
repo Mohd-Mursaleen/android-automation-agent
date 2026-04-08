@@ -31,11 +31,12 @@ python run.py "open Settings and show the Android version" --verbose
 python run.py "Open Instamart, add milk to cart" --steps 40 --quiet
 
 # python run.py options:
-#   --steps N     hard cap on action count (default 25)
-#   --device ID   ADB serial (auto-detected if omitted)
-#   --quiet       suppress step-by-step output
-#   --check       run health check only, then exit
-#   --quality N   screenshot quality (default 100, no compression)
+#   --steps N      hard cap on action count (default 25)
+#   --device ID    ADB serial (auto-detected if omitted)
+#   --quiet        suppress step-by-step output
+#   --check        run health check only, then exit
+#   --quality N    screenshot quality (default 100, no compression)
+#   --screenshot   take screenshot, send to Telegram, exit (no automation)
 ```
 
 **Testing:**
@@ -83,24 +84,24 @@ Only one automation task can run at a time (single Android screen).
 
 ### Monitoring & Telegram notifications
 
-The automation sends three types of Telegram notifications:
+Notifications are integrated directly into the Python runner — no external monitor scripts needed.
 
-1. **Start notification** — sent by `run.py` immediately when automation begins.
-   Includes goal string and max steps. Fires before the planner even runs.
+1. **Start notification** — sent by `run.py` before `run_task()` is called.
+   Uses `urllib.request` (stdlib only). Includes goal string and max steps.
 
-2. **Progress updates (every 45s)** — sent by `monitor_progress.sh`.
-   Each update includes a fresh screenshot of the phone + caption with:
-   step number, elapsed time, last action, and goal.
-   The monitor auto-exits when `last_result.json` is written.
+2. **Progress updates (every `_PROGRESS_EVERY` steps)** — sent by `runner.py` inside the
+   main loop, after `summarizer_node` runs. Default: every 2 steps.
+   Each update sends `state.latest_screenshot_b64` (the summarizer's fresh post-action
+   screenshot) with a caption: step count, elapsed time, current subgoal, last action.
 
-3. **Final result** — sent by `run.py` when automation completes.
-   Includes success/failure emoji, summary, step count, and final screenshot.
-   `monitor_result.sh` acts as safety net — waits 8s after result file appears,
-   then sends the screenshot as a document if `run.py` crashed before notifying.
+3. **Final result** — sent by `runner.py` in the `finally` block.
+   Fires even if the run raised an exception or was cancelled.
+   Takes one last fresh screenshot; falls back to `state.latest_screenshot_b64` on
+   ADB failure. Includes success/failure emoji, step count, elapsed time,
+   completed/failed subgoals, and failure reason if applicable.
 
-Monitor scripts write PIDs to `progress.pid` and `result.pid`.
-Both self-cleanup: on startup they kill any previous instance before registering.
-`kill_monitors.sh` kills both by PID and has `pkill` fallback for orphans.
+`_notify_telegram()` in `runner.py` uses `urllib.request` (stdlib — no `requests` package).
+`_PROGRESS_EVERY = 2` is a module-level constant in `runner.py`; change it to tune frequency.
 
 ### Screen wake behavior
 
@@ -170,26 +171,12 @@ This lets search suggestions and autocomplete results load from the server befor
 the Summarizer takes a screenshot. The delay is unconditional — fires on every
 `type_text` regardless of `press_enter` setting.
 
-### Monitor auto-exit timeouts
-
-Both monitor scripts have built-in inactivity timeouts to prevent zombie processes:
-- `monitor_progress.sh`: sends updates every 60s. Exits if `last_step.json` has not
-  been updated for 2 minutes (automation is dead or was cancelled).
-- `monitor_result.sh`: checks for results every 15s. Exits after 2 minutes of waiting
-  if no `last_result.json` appears.
-
-The cancellation protocol in SKILL.md also explicitly runs `kill_monitors.sh` as
-an immediate kill, but these timeouts are the safety net.
-
 ### Voice feedback (TTS)
 
-`termux-tts-speak` is used to give the user audio feedback on the device.
+`termux-tts-speak` is called automatically — no dispatcher action required.
 
-- **Task start** (Step 0.5): announce task before monitors start — short natural summary, max 150 chars
-- **Task complete** (Step 4): announce success or failure after result arrives
-
-Never speak the raw goal string verbatim — summarise it naturally.
-Example: goal = "Open Rapido, book Auto to Electronic City" → speak "Booking auto ride on Rapido"
+- **Task start**: `run.py` calls it before `run_task()` with the first 100 chars of the goal.
+- **Task complete**: `runner.py` calls it in the `finally` block — "Task complete." or "Task failed."
 
 ### Smart pre-flight (Section 2.5)
 

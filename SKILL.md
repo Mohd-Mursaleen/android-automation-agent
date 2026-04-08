@@ -208,10 +208,14 @@ Parse it and reply:
 
 ### Step 2B — Session ID returned (normal case)
 
-Tell the user:
-> "Automation started. You'll get live screenshots on Telegram every 2 steps. When you see the final result there, come back and I'll continue."
+When exec returns `Command still running (session XXXX, pid YYYY)...`, the automation IS running. Your job is done for now.
 
-You are now **free to respond normally.** The automation runs in background. Telegram handles all updates.
+Reply to the user with exactly this (fill in the session name):
+> "Automation started (session XXXX). Watch Telegram — you'll get a screenshot every 2 steps and a final result when it's done. Come back when you're ready to continue."
+
+Then **stop calling tools.** Do not call exec again. Do not verify the session. Do not check logs. Output your reply and wait for the user to respond.
+
+The automation runs in background. Telegram handles all progress and result notifications automatically.
 
 ### Step 3 — When user comes back ("done?", "book it", "what happened?", "next step")
 
@@ -234,6 +238,7 @@ Parse the JSON (`success`, `summary`). Report to user. Continue to next step if 
 
 - **NEVER use `process/log`** — it causes your turn to timeout. Do not use it for anything.
 - **NEVER use `process/poll`** — it returns nothing useful for this pattern.
+- **After getting a session ID → reply once → stop.** Do not call exec again. Do not verify. Do not loop.
 - **NEVER loop checking the session** — the only check is `check_busy.sh`, once, when user asks.
 - `last_result.json` is written when automation finishes. Read it then. Not before.
 
